@@ -2,14 +2,15 @@ from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, Float
 from sqlalchemy.orm import relationship
 from database.database import Base
 
+
 class Room(Base):
     __tablename__ = "rooms"
 
     room_id = Column(Integer, primary_key=True)
     hotel_id = Column(Integer, ForeignKey("hotels.id"))
 
-    room_number = Column(String)
-    room_type = Column(String)
+    room_number = Column(String(30))
+    room_type = Column(String(30))
     price = Column(Float)
 
     is_available = Column(Boolean, default=True)

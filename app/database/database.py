@@ -7,7 +7,6 @@ engine = create_engine(
     DATABASE_URL
 )
 
-print("connected")
 
 SessionLocal = sessionmaker(
     autocommit=False,
@@ -15,5 +14,13 @@ SessionLocal = sessionmaker(
     bind=engine
 )
 
+
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 Base = declarative_base()
