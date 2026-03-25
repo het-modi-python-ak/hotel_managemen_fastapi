@@ -3,6 +3,7 @@ from sqlalchemy.orm import relationship
 from datetime import datetime
 from database.database import Base
 
+
 class Booking(Base):
     __tablename__ = "bookings"
 
@@ -19,7 +20,7 @@ class Booking(Base):
 
     total_price = Column(Float)
 
-    status = Column(String, default="pending")
+    status = Column(String(30), default="pending")
 
     created_at = Column(DateTime, default=datetime.now)
 

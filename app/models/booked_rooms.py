@@ -2,6 +2,7 @@ from sqlalchemy import Column, Integer, ForeignKey
 from sqlalchemy.orm import relationship
 from database.database import Base
 
+
 class BookedRoom(Base):
     __tablename__ = "booked_rooms"
 
