@@ -2,7 +2,7 @@
 from sqlalchemy import Column, Integer, String, ForeignKey, Float
 from sqlalchemy.orm import relationship
 from database.database import Base
-
+from models.room import Room
 
 class Hotel(Base):
     __tablename__ = "hotels"
@@ -21,3 +21,4 @@ class Hotel(Base):
     owner = relationship("User", back_populates="hotels")
     rooms = relationship("Room", back_populates="hotel")
     bookings = relationship("Booking", back_populates="hotel")
+

@@ -7,9 +7,6 @@ from models.role import Role
 router = APIRouter()
 
 
-@router.get("/role")
-def hi():
-    return {"mwaa"}
 
 @router.post("/assign-role")
 def assign_role(user_id: int, role_id: int, db: Session = Depends(get_db)):

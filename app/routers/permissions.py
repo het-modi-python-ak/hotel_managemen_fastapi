@@ -8,7 +8,7 @@ from models.permission import Permission
 router = APIRouter()
 
 
-@router.post("/permissions")
+@router.post("/")
 def create_permission(name: str, db: Session = Depends(get_db)):
 
     permission = Permission(name=name)
@@ -21,9 +21,21 @@ def create_permission(name: str, db: Session = Depends(get_db)):
 
 
 
+@router.get("/")
+def get_permissions(db: Session = Depends(get_db)):
+    permissions = db.query(Permission).all()
+    return [
+        {
+            "id": p.id, 
+            "name": p.name
+        } 
+        for p in permissions
+    ]
 
 
-@router.post("/assign-permission")
+
+
+@router.post("/assign_permission")
 def assign_permission(role_id: int, permission_id: int, db: Session = Depends(get_db)):
 
     role = db.query(Role).filter(Role.id == role_id).first()

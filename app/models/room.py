@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, Float
 from sqlalchemy.orm import relationship
 from database.database import Base
-
+from models.booked_room import BookedRoom
 
 class Room(Base):
     __tablename__ = "rooms"
