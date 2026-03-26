@@ -12,6 +12,8 @@ class Booking(Base):
     user_id = Column(Integer, ForeignKey("users.id"))
     hotel_id = Column(Integer, ForeignKey("hotels.id"))
 
+    # room_id = Column(Integer , ForeignKey("room.room_id"))
+
     total_room = Column(Integer)
     no_of_people = Column(Integer)
 
@@ -28,3 +30,4 @@ class Booking(Base):
     hotel = relationship("Hotel", back_populates="bookings")
 
     booked_rooms = relationship("BookedRoom", back_populates="booking")
+     

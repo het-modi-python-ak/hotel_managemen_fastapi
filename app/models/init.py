@@ -1,8 +1,8 @@
-from .user import User
-from .role import Role
-from .permission import Permission
-from .hotel import Hotel
-from .room import Room
-from .booking import Booking
-from .booked_room import BookedRoom
-from .association import user_roles, role_permissions
+from models.user import User
+from models.role import Role
+from models.permission import Permission
+from models.hotel import Hotel
+from models.room import Room
+from models.booking import Booking
+from models.booked_room import BookedRoom
+from models.association import user_roles, role_permissions
