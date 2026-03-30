@@ -1,7 +1,19 @@
-from sqlalchemy import func
-from models.booking import Booking
-# return the rooms which are booked 
 
-def get_booked_rooms(db,room_id,check_in,check_out):
-    booked = db.query(func.sum(Booking.total_room)).filer(Booking.room_id==room_id,Booking.status != "cancelled", Booking.check_in<Booking.check_out).scalar()
-    return booked or 0
+from sqlalchemy.orm import Session
+from models.booking_item import BookingItem
+from models.room import Room
+
+
+def get_available_rooms(db: Session, room_id, check_in, check_out):
+
+    room = db.query(Room).filter(Room.room_id == room_id).first()
+
+    bookings = db.query(BookingItem).filter(
+        BookingItem.room_id == room_id,
+        BookingItem.check_out > check_in,
+        BookingItem.check_in < check_out
+    ).all()
+
+    booked = sum(b.quantity for b in bookings)
+
+    return room.total_rooms - booked

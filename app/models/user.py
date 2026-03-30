@@ -26,4 +26,3 @@ class User(Base):
     # showing error in this erro 
 
 
-# here i want to change the cloumn size  of password form 30 to 255

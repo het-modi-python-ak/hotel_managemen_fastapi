@@ -1,19 +1,27 @@
-from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, Float
+from sqlalchemy import Column, Integer, Float, ForeignKey, Enum, UniqueConstraint
 from sqlalchemy.orm import relationship
 from database.database import Base
-from models.booked_room import BookedRoom
+from models.room_type import RoomType
+
 
 class Room(Base):
+
     __tablename__ = "rooms"
 
-    room_id = Column(Integer, primary_key=True)
-    hotel_id = Column(Integer, ForeignKey("hotels.id"))
+    room_id = Column(Integer, primary_key=True, index=True)
 
-    room_number = Column(String(30))
-    room_type = Column(String(30))
+    hotel_id = Column(Integer, ForeignKey("hotels.hotel_id"))
+
+    room_type = Column(Enum(RoomType))
+
     price = Column(Float)
 
-    is_available = Column(Boolean, default=True)
+    total_rooms = Column(Integer)
+
+    __table_args__ = (
+        UniqueConstraint("hotel_id", "room_type"),
+    )
 
     hotel = relationship("Hotel", back_populates="rooms")
-    booked_rooms = relationship("BookedRoom", back_populates="room")
+
+    booking_items = relationship("BookingItem", back_populates="room")
