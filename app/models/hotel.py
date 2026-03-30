@@ -1,10 +1,10 @@
-
-
 from sqlalchemy import Column, Integer, String, ForeignKey
 from sqlalchemy.orm import relationship
 from database.database import Base
 
+
 class Hotel(Base):
+
     __tablename__ = "hotels"
 
     hotel_id = Column(Integer, primary_key=True)
@@ -22,4 +22,3 @@ class Hotel(Base):
     rooms = relationship("Room", back_populates="hotel")
 
     bookings = relationship("Booking", back_populates="hotel")
-

@@ -9,7 +9,7 @@ from core.security import verify_password, create_access_token
 from fastapi.security.oauth2 import OAuth2PasswordRequestForm
 from fastapi import Depends
 from typing import Annotated
-
+from core.dependencies import get_current_user
 
 router = APIRouter()
 
@@ -47,3 +47,9 @@ def login(data: Annotated[OAuth2PasswordRequestForm, Depends()], db: Session = D
    
     token = create_access_token({"user_id": user.id})
     return {"access_token": token, "token_type": "bearer"}
+
+
+@router.get("/")
+def get_current_user(db : Session =  Depends(get_db), current_user=Depends(get_current_user)):
+    user = db.query(User).filter(User.id == current_user.id).first()
+    return { "current user is " ,user.name }
