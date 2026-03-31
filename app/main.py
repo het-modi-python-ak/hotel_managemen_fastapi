@@ -3,9 +3,15 @@ from fastapi import FastAPI, APIRouter
 from routers import admin, auth, permissions, roles ,hotels,rooms,bookings
 from database.database import engine, Base 
 import models  
+from middleware.logging import LoggingMiddleware
+
 
 
 app = FastAPI() 
+
+app.add_middleware(LoggingMiddleware)
+
+
 
 Base.metadata.create_all(bind=engine)  
 
