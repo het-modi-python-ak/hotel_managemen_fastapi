@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from database.database import get_db
 from models.hotel import Hotel
 from core.dependencies import get_current_user
+from core.hotel_enums import StateEnum,CountryEnum
 
 router = APIRouter()
 
@@ -13,8 +14,8 @@ def create_hotel(
     name: str,
     address: str,
     city: str,
-    state: str,
-    country: str,
+    state: StateEnum,
+    country: CountryEnum,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user)
 ):
