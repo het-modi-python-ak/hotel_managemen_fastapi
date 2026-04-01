@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Integer, Float, ForeignKey, Enum, UniqueConstraint
 from sqlalchemy.orm import relationship
-from database.database import Base
-from models.room_type import RoomType
+from app.database.database import Base
+from app.models.room_type import RoomType
 
 
 class Room(Base):

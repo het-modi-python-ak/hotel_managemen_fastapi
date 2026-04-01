@@ -14,7 +14,7 @@ from core.hotel_enums import StateEnum, CountryEnum
 
 router = APIRouter()
 
-LOCK_TIME = 300  # for booking
+LOCK_TIME = 30  # for booking
 
 @router.post("/", status_code=status.HTTP_201_CREATED)
 def create_booking(
@@ -38,6 +38,10 @@ def create_booking(
             Room.hotel_id == booking_data.hotel_id,
             Room.room_type == room_request.room_type
         ).first()
+
+        if room_request.quantity < 1:
+            raise HTTPException(status_code =400 , detail="booking quantity should be minimum 1")
+        
 
         if not room:
             raise HTTPException(
@@ -67,6 +71,9 @@ def create_booking(
 
 
         available = room.total_rooms - booked - locked_rooms # available rooms
+
+        if available < 0:
+            raise HTTPException(status_code = 404 , detail = "sorry , no rooms availabel in this hotel ")
 
         print("available rooms " , available)
         print("booked rooms " , booked)
@@ -127,6 +134,10 @@ def create_booking(
         "message": "Rooms locked for 5 minutes. Confirm booking before timeout."
     }
 
+
+
+
+
 # confirm
 @router.put("/{booking_id}")
 def confirm_booking(
@@ -143,29 +154,50 @@ def confirm_booking(
 
     if booking.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized")
-        
+
     if booking.status == "confirmed":
         return {"message": "Booking already confirmed"}
+
+    if booking.status != "pending":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot confirm booking with status: {booking.status}. Only pending bookings can be confirmed."
+        )
 
     items = db.query(BookingItem).filter(
         BookingItem.booking_id == booking_id
     ).all()
 
+    # Verify all locks are still active
     for item in items:
         lock_key = f"lock:{booking.hotel_id}:{item.room_id}:{booking.check_in}:{booking.check_out}"
-        
-        # Check if the lock key exists before attempting to modify it
-        if redis_client.exists(lock_key):
-            new_value = redis_client.decrby(lock_key, item.quantity)
+        if not redis_client.exists(lock_key):
+            # If any lock key is missing/expired, cancel the booking and deny confirmation
+            booking.status = "cancelled"
+            db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Booking window expired. Booking automatically cancelled. Please create a new booking."
+            )
 
-            if new_value <= 0:
-                redis_client.delete(lock_key)
+    # If all locks are present, proceed with confirmation and release the locks
+    for item in items:
+        lock_key = f"lock:{booking.hotel_id}:{item.room_id}:{booking.check_in}:{booking.check_out}"
+        new_value = redis_client.decrby(lock_key, item.quantity)
+        if new_value <= 0:
+            redis_client.delete(lock_key)
 
     booking.status = "confirmed"
-
     db.commit()
 
     return {"message": "Booking confirmed"}
+
+
+
+
+
+
+
 
 # delete booking
 @router.delete("/{booking_id}")
@@ -207,6 +239,13 @@ def cancel_booking(
 
     return {"message": "Booking cancelled successfully"}
 
+
+
+
+
+
+#get my bookins 
+
 @router.get("/")
 def get_my_bookings(
     db: Session = Depends(get_db),
@@ -218,7 +257,7 @@ def get_my_bookings(
 
     return bookings
 
-@router.get("/details/{booking_id}")
+@router.get("{booking_id}")
 def get_booking_details(
     booking_id: int,
     db: Session = Depends(get_db),
@@ -255,3 +294,98 @@ def get_booking_details(
         "status": booking.status,
         "rooms_booked": room_details
     }
+
+
+
+
+
+
+#for cancelling all pending bookings for tetsting propese 
+@router.post("/test/cancel_all_pending")
+def cancel_all_pending_bookings(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user)
+):
+    
+  
+    # 1. Find all pending bookings for the user
+    pending_bookings = db.query(Booking).filter(
+        Booking.user_id == current_user.id,
+        Booking.status == "pending" 
+    ).all()
+
+    if not pending_bookings:
+        return {"message": "No pending bookings to cancel"}
+
+    total_cancelled = 0
+    for booking in pending_bookings:
+        # 2. Get associated booking items to unlock rooms
+        items = db.query(BookingItem).filter(
+            BookingItem.booking_id == booking.booking_id
+        ).all()
+
+        for item in items:
+            lock_key = f"lock:{booking.hotel_id}:{item.room_id}:{booking.check_in}:{booking.check_out}"
+            
+            # 3. Decrement redis lock
+            if redis_client.exists(lock_key):
+                new_value = redis_client.decrby(lock_key, item.quantity)
+                if new_value <= 0:
+                    redis_client.delete(lock_key)
+        
+        # 4. Update status
+        booking.status = "cancelled"
+        total_cancelled += 1
+
+    db.commit()
+    return {"message": f"Successfully cancelled {total_cancelled} pending bookings."}
+
+
+
+
+
+#cancelle all confirmed booking 
+
+
+
+#for cancelling all pending bookings for tetsting propese 
+@router.post("/test/cancel_all_confirm")
+def cancel_all_pending_bookings(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user)
+):
+    
+    # 1. Find all pending bookings for the user
+    pending_bookings = db.query(Booking).filter(
+        Booking.user_id == current_user.id,
+        Booking.status == "confirmed" 
+    ).all()
+
+    if not pending_bookings:
+        return {"message": "No confirmed bookings to cancel"}
+
+    total_cancelled = 0
+    for booking in pending_bookings:
+        # 2. Get associated booking items to unlock rooms
+        items = db.query(BookingItem).filter(
+            BookingItem.booking_id == booking.booking_id
+        ).all()
+
+        for item in items:
+            lock_key = f"lock:{booking.hotel_id}:{item.room_id}:{booking.check_in}:{booking.check_out}"
+            
+            # 3. Decrement redis lock
+            if redis_client.exists(lock_key):
+                new_value = redis_client.decrby(lock_key, item.quantity)
+                if new_value <= 0:
+                    redis_client.delete(lock_key)
+        
+        # 4. Update status
+        booking.status = "cancelled"
+        total_cancelled += 1
+
+    db.commit()
+    return {"message": f"Successfully cancelled {total_cancelled} confirmed bookings."}
+
+
+
