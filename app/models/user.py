@@ -2,10 +2,10 @@
 from sqlalchemy import Column, Integer, String, DateTime,ForeignKey,Float
 from sqlalchemy.orm import relationship
 from datetime import datetime
-from database.database import Base
-from models.association import user_roles
-from models.hotel import Hotel
-from models.booking import Booking
+from app.database.database import Base
+from app.models.association import user_roles
+from app.models.hotel import Hotel
+from app.models.booking import Booking
 
 class User(Base):
     __tablename__ = "users"
