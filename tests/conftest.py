@@ -16,7 +16,7 @@ engine = create_engine(
 )
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# 1. Define the fixture with the @pytest.fixture decorator
+#  Define the fixture with the @pytest.fixture decorator
 @pytest.fixture
 def client():
     # Dependency overrides

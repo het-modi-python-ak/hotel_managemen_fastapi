@@ -1,98 +1,206 @@
 import pytest
-from fastapi.testclient import TestClient
-from datetime import date, timedelta
-from unittest.mock import MagicMock
-from app.main import app
-from app.database.database import get_db
-from app.core.dependencies import get_current_user
 
-client = TestClient(app)
 
 
 @pytest.fixture
-def mock_db():
-    return MagicMock()
-
-@pytest.fixture
-def mock_redis(mocker):
+def setup_hotel_with_room(client):
     
-    return mocker.patch("app.core.redis_client.redis_client")
+    # Create Hotel
+    hotel_res = client.post(
+        "/hotels/", 
+        params={
+            "name": "Test Suite Hotel", 
+            "address": "123 Main St", 
+            "city": "Surat", 
+            "state": "gujarat", 
+            "country": "india"
+        }
+    )
+    hotel_data = hotel_res.json()
+    hotel_id = hotel_data["hotel_id"]
 
-@pytest.fixture
-def mock_user():
-    return MagicMock(id=1, email="test@user.com")
-
-@pytest.fixture(autouse=True)
-def setup_dependencies(mock_db, mock_user):
+    # Create Room
+    z =  client.post(
+        f"/rooms/{hotel_id}", 
+        params={
+            "hotel_id": hotel_id, 
+            "room_type": "DELUXE", 
+            "price": 1000, 
+            "total_rooms": 10
+        }
+    )
     
-    app.dependency_overrides[get_db] = lambda: mock_db
-    app.dependency_overrides[get_current_user] = lambda: mock_user
-    yield
-    app.dependency_overrides.clear()
+    return hotel_id
 
+#  TEST CASES 
 
-
-def test_create_booking_success(mock_db, mock_redis):
-    # 1. Setup Mock Room
-    mock_room = MagicMock(room_id=1, hotel_id=1, room_type="REGULAR", total_rooms=10, price=100)
-    mock_db.query.return_value.filter.return_value.first.return_value = mock_room
+def test_get_all_my_bookings(client, setup_hotel_with_room):
     
-    # 2. Setup Availability (0 booked, 0 locked)
-    mock_db.query.return_value.join.return_value.filter.return_value.scalar.return_value = 0
-    mock_redis.get.return_value = None 
-
-    payload = {
-        "hotel_id": 1,
-        "check_in": str(date.today() + timedelta(days=1)),
-        "check_out": str(date.today() + timedelta(days=2)),
-        "no_of_people": 2,
-        "rooms": [{"room_type": "REGULAR", "quantity": 1}]
-    }
-    
-    response = client.post("/bookings/", json=payload)
-    
+    response = client.get("/booking/")
     assert response.status_code == 200
-    # assert "booking_id" in response.json()
-    # assert "Rooms locked" in response.json()["message"]
+    assert isinstance(response.json(), list)
 
-def test_create_booking_past_date():
-    response = client.post("/bookings/", json={
-        "hotel_id": 1,
-        "check_in": str(date.today() - timedelta(days=1)),
-        "check_out": str(date.today() + timedelta(days=1)),
-        "no_of_people": 1,
-        "rooms": [{"room_type": "deluxe", "quantity": 1}]
-    })
-    assert response.status_code == 400
-    assert "past" in response.json()["detail"]
+def test_confirm_booking(client, setup_hotel_with_room): 
+    # Create Booking 
+    booking_res = client.post("/booking/", json={ 
+        "hotel_id": setup_hotel_with_room, 
+        "check_in": "2026-05-10", 
+        "check_out": "2026-05-12", 
+        "no_of_people": 2, 
+        "rooms": [{"room_type": "DELUXE", "quantity": 1}] 
+    }) 
+    
+    st  = booking_res.json()["status"]
+    assert st == "pending"
+    booking_id = booking_res.json()["booking_id"] 
+    
 
-def test_confirm_booking_success(mock_db, mock_redis):
-    # Mock finding the booking
-    mock_booking = MagicMock(booking_id=1, user_id=1, status="pending")
-    mock_db.query.return_value.filter.return_value.first.return_value = mock_booking
-    
-    # Mock finding booking items
-    mock_item = MagicMock(room_id=1, quantity=1)
-    mock_db.query.return_value.filter.return_value.all.return_value = [mock_item]
-    
-    mock_redis.exists.return_value = True
+    # Confirm Booking 
+    confirm_res = client.patch(f"/booking/{booking_id}") 
+    assert confirm_res.status_code == 200 
+    assert "confirmed" in confirm_res.json()["message"].lower() 
 
-    response = client.put("/bookings/1")
+    # Negative: no of people
+    negative_people_book = client.post("/booking/", json={ 
+        "hotel_id": setup_hotel_with_room, 
+        "check_in": "2026-05-10", 
+        "check_out": "2026-05-12", 
+        "no_of_people": -5, 
+        "rooms": [{"room_type": "DELUXE", "quantity": 1}] 
+    }) 
+    assert negative_people_book.status_code == 400
+
     
+    
+    #negative number of rooms
+    
+    negative_no_of_rooms = client.post(
+        "/booking/",
+        json={
+            "hotel_id": setup_hotel_with_room, 
+        "check_in": "2026-05-10", 
+        "check_out": "2026-05-12", 
+        "no_of_people": 5, 
+        "rooms": [{"room_type": "DELUXE", "quantity": -5}] 
+        }
+        
+        
+        
+    )
+    
+    
+    
+    
+    
+    
+    assert negative_no_of_rooms.status_code==400
+    
+    
+    #wrong category 
+    
+    wrong_category_room = client.post(
+        "/booking",
+        json={
+            "hotel_id": setup_hotel_with_room, 
+        "check_in": "2026-05-10", 
+        "check_out": "2026-05-12", 
+        "no_of_people": 5, 
+        "rooms": [{"room_type": "BELUX", "quantity": 5}] 
+            
+        }
+    )
+    
+    assert wrong_category_room.status_code == 404
+    
+    
+    
+    #neagtive number of people
+    
+    negative_no_of_people  = client.post(
+        "/booking/",
+        json={
+           "hotel_id": setup_hotel_with_room,
+            "check_in": "2026-05-10",
+            "check_out": "2026-05-12",
+            "no_of_people": -2,
+            "rooms": [{"room_type": "DELUXE", "quantity": 9}]
+        }
+    )
+    
+    
+    assert negative_no_of_people.status_code == 400
+    
+    
+    
+    #more number of rooms
+    
+    more_no_rooms = client.post(
+        "/booking/",
+        json={
+             "hotel_id": setup_hotel_with_room,
+            "check_in": "2026-05-10",
+            "check_out": "2026-05-12",
+            "no_of_people": 2,
+            "rooms": [{"room_type": "DELUXE", "quantity": 19}]
+        }
+    )
+    
+    
+    assert more_no_rooms.status_code == 409
+    
+    
+    
+
+
+
+def test_get_booking_details(client, setup_hotel_with_room):
+    """Test retrieving specific booking details with room joins."""
+    #  Create a booking first
+    booking_res = client.post(
+        "/booking/", 
+        json={ 
+            "hotel_id": setup_hotel_with_room,
+            "check_in": "2026-06-01",
+            "check_out": "2026-06-05",
+            "no_of_people": 1,
+            "rooms": [{"room_type": "DELUXE", "quantity": 2}]
+        }
+    )
+    booking_id = booking_res.json()["booking_id"]
+
+    #  Get Details
+    response = client.get(f"/booking/{booking_id}")
     assert response.status_code == 200
-    assert mock_booking.status == "confirmed"
-    assert response.json()["message"] == "Booking confirmed"
+    data = response.json()
+    assert data["booking_id"] == booking_id
+    assert data["rooms_booked"][0]["room_type"] == "DELUXE"
 
-def test_cancel_booking_success(mock_db, mock_redis):
-    # Mock finding the booking
-    mock_booking = MagicMock(booking_id=1, user_id=1, status="confirmed")
-    mock_db.query.return_value.filter.return_value.first.return_value = mock_booking
-    
-    # Mock items
-    mock_db.query.return_value.filter.return_value.all.return_value = []
 
-    response = client.delete("/bookings/1")
-    
+
+
+
+
+def test_cancel_booking(client, setup_hotel_with_room):
+   
+    #  Create Booking
+    booking_res = client.post(
+        "/booking/", 
+        json={ 
+            "hotel_id": setup_hotel_with_room,
+            "check_in": "2026-07-01",
+            "check_out": "2026-07-02",
+            "no_of_people": 1,
+            "rooms": [{"room_type": "DELUXE", "quantity": 1}]
+        }
+    )
+    booking_id = booking_res.json()["booking_id"]
+
+    #  Cancel it
+    response = client.delete(f"/booking/{booking_id}")
     assert response.status_code == 200
-    assert mock_booking.status == "cancelled"
-    assert response.json()["message"] == "Booking cancelled successfully"
+    assert "cancelled" in response.json()["message"].lower()
+
+def test_booking_not_found_error(client):
+    
+    response = client.get("/booking/99999")
+    assert response.status_code == 404
