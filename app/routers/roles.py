@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from database.database import get_db
-from models.role import Role
-from models.user import User
+from app.database.database import get_db
+from app.models.role import Role
+from app.models.user import User
 
 router = APIRouter()
 
@@ -48,7 +48,7 @@ def get_role(role_id: int, db: Session = Depends(get_db)):
     return role
 
 # update a role by ID
-@router.put("/{role_id}")
+@router.patch("/{role_id}")
 def update_role(role_id: int, name: str, db: Session = Depends(get_db)):
     role = db.query(Role).filter(Role.id == role_id).first()
     if role is None:

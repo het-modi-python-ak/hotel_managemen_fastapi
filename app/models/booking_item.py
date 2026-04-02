@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, ForeignKey, Date
 from sqlalchemy.orm import relationship
-from database.database import Base
+from app.database.database import Base
 
 
 class BookingItem(Base):

@@ -2,8 +2,8 @@ from pydantic import BaseModel
 from fastapi import FastAPI, APIRouter  
 from app.routers import admin, auth, permissions, roles, hotels, rooms, bookings
 from app.database.database import engine, Base 
-import models  
-from middleware.logging import LoggingMiddleware
+import app.models  
+from app.middleware.logging import LoggingMiddleware
 
 
 
