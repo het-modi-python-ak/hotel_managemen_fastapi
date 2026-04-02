@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status,BackgroundTasks
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from datetime import date
@@ -6,6 +6,7 @@ from app.database.database import get_db
 from app.models.booking import Booking
 from app.models.booking_item import BookingItem
 from app.models.room import Room
+from app.models.user import User
 from app.schemas.booking import BookingCreate
 from app.core.dependencies import get_current_user
 from app.core.redis_client import redis_client
@@ -17,6 +18,10 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from datetime import date
 from sqlalchemy.exc import SQLAlchemyError
+from app.services.email_service import send_booking_confirmation_email,send_cancellation_email
+
+
+
 
 router = APIRouter()
 
@@ -165,7 +170,8 @@ def create_booking(
 
 @router.patch("/{booking_id}", status_code=status.HTTP_200_OK)
 def confirm_booking(
-    booking_id: int, 
+    booking_id: int,
+    background_tasks : BackgroundTasks,
     db: Session = Depends(get_db), 
     current_user=Depends(get_current_user)
 ):
@@ -217,6 +223,10 @@ def confirm_booking(
         booking.status = "confirmed"
         db.commit()
         db.refresh(booking)
+        #email sending 
+        user = db.query(User).filter(User.id==booking.user_id).first()
+        
+        background_tasks.add_task(send_booking_confirmation_email,user.email,booking.booking_id)
         
         return {"message": "Booking confirmed", "booking_id": booking.booking_id}
 
@@ -243,6 +253,7 @@ def confirm_booking(
 @router.delete("/{booking_id}")
 def cancel_booking(
     booking_id: int,
+    background_tasks:BackgroundTasks,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user)
 ):
@@ -270,6 +281,12 @@ def cancel_booking(
 
         booking.status = "cancelled"
         db.commit()
+        
+        #booking cancellation email 
+        user = db.query(User).filter(User.id==booking.user_id).first()
+        
+        background_tasks.add_task(send_cancellation_email,user.email,booking.booking_id)
+        
         return {"message": "Booking cancelled successfully"}
 
     except HTTPException as he:
