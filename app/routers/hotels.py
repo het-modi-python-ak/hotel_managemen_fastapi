@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from database.database import get_db
-from models.hotel import Hotel
-from core.dependencies import get_current_user,require_permission
-from core.hotel_enums import StateEnum, CountryEnum
+from app.database.database import get_db
+from app.models.hotel import Hotel
+from app.core.dependencies import get_current_user,require_permission
+from app.core.hotel_enums import StateEnum, CountryEnum
 from pydantic import BaseModel
 from typing import Optional
 
@@ -26,7 +26,7 @@ def create_hotel(
     country: CountryEnum,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    user = Depends(require_permission("add_hotel"))   #permission endpoint
+    # user = Depends(require_permission("add_hotel"))   #permission endpoint
 
 ):
     hotel = Hotel(
@@ -66,9 +66,9 @@ def get_hotel(hotel_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Hotel not found")
     return hotel
 
-# --- New Endpoints ---
 
-@router.put("/{hotel_id}")
+
+@router.patch("/{hotel_id}")
 def update_hotel(
     hotel_id: int,
     hotel_update: HotelUpdate,
@@ -77,14 +77,14 @@ def update_hotel(
 ):
     hotel = db.query(Hotel).filter(
         Hotel.hotel_id == hotel_id,
-        Hotel.owner_id == current_user.id # Ensure the user owns the hotel
+        Hotel.owner_id == current_user.id 
     ).first()
 
     if not hotel:
         raise HTTPException(status_code=404, detail="Hotel not found or user not authorized to update")
 
-    # Update attributes dynamically based on the Pydantic model
-    for field, value in hotel_update.dict(exclude_unset=True).items():
+ 
+    for field, value in hotel_update.model_dump(exclude_unset=True).items():
         setattr(hotel, field, value)
 
     db.commit()
@@ -108,3 +108,5 @@ def delete_hotel(
     db.delete(hotel)
     db.commit()
     return {"detail": "Hotel deleted successfully"}
+
+
