@@ -2,6 +2,14 @@ from datetime import datetime, timedelta
 from jose import jwt
 # from passlib.context import CryptContext
 from pwdlib import PasswordHash
+import secrets
+
+
+
+def generate_email_token():
+    return secrets.token_urlsafe(32)
+
+
 
 ph = PasswordHash.recommended()
 

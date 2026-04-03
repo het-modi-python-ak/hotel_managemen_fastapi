@@ -16,8 +16,12 @@ class Hotel(Base):
     country = Column(String(100))
 
     owner_id = Column(Integer, ForeignKey("users.id"))
+    
+    
 
     owner = relationship("User", back_populates="hotels")
+    
+   
 
     rooms = relationship("Room", back_populates="hotel")
 

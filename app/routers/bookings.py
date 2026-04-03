@@ -20,12 +20,12 @@ from datetime import date
 from sqlalchemy.exc import SQLAlchemyError
 from app.services.email_service import send_booking_confirmation_email,send_cancellation_email
 from app.core.rate_limiter import fixed_window_rate_limit
-
-
+from app.tasks.reminder_tasks import send_booking_reminder
+from app.models.user_email import User2
 
 router = APIRouter()
 
-LOCK_TIME = 50  # time for booking
+LOCK_TIME = 10  # time for booking
 
 
 logger = logging.getLogger(__name__)
@@ -122,6 +122,12 @@ def create_booking(
         
         db.add(booking)
         db.flush()  # Generate booking_id
+        
+        
+        #send booking email 
+        user = db.query(User2).filter(User2.id==current_user.id).first()
+        
+        send_booking_reminder.apply_async(args=[user.email,booking.booking_id],countdown=10)
 
         for item in room_items:
             db.add(
@@ -134,7 +140,9 @@ def create_booking(
         
         db.commit()
         db.refresh(booking)
-
+        
+        
+        
         return {
             "booking_id": booking.booking_id,
             "status": booking.status,
@@ -152,7 +160,7 @@ def create_booking(
         db.rollback()
         
         for key in locked_keys_in_this_req:
-            redis_client.decrby(key, room_request.quantity) # Simplistic cleanup
+            redis_client.decrby(key, room_request.quantity) 
         
         print(f"Database error: {e}") # Log the error
         raise HTTPException(
