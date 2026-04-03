@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException,Request
 from sqlalchemy.orm import Session
 from app.database.database import get_db
 from app.models.hotel import Hotel
@@ -6,7 +6,7 @@ from app.core.dependencies import get_current_user,require_permission
 from app.core.hotel_enums import StateEnum, CountryEnum
 from pydantic import BaseModel
 from typing import Optional
-
+from app.core.rate_limiter import fixed_window_rate_limit,sliding_window_rate_limiter
 
 class HotelUpdate(BaseModel):
     name: Optional[str] = None
@@ -43,7 +43,13 @@ def create_hotel(
     return hotel
 
 @router.get("/")
-def get_all_hotels(db: Session = Depends(get_db)):
+def get_all_hotels(request:Request,db: Session = Depends(get_db),current_user=Depends(get_current_user)):
+    
+    client_host = request.client.host
+    
+    # fixed_window_rate_limit(current_user.id,"create_booking")
+    sliding_window_rate_limiter(client_host,"get_all_hotels")
+    
     hotels = db.query(Hotel).all()
     return hotels
 
