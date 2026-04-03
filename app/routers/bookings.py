@@ -19,7 +19,7 @@ from sqlalchemy import func
 from datetime import date
 from sqlalchemy.exc import SQLAlchemyError
 from app.services.email_service import send_booking_confirmation_email,send_cancellation_email
-
+from app.core.rate_limiter import fixed_window_rate_limit
 
 
 
@@ -37,6 +37,8 @@ def create_booking(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user)
 ):
+    
+    # fixed_window_rate_limit(current_user.id,"create_booking")
     #  Validation Checks (Client Errors - 400)
     if booking_data.check_in < date.today():
         raise HTTPException(status_code=400, detail="Check-in cannot be in the past")
@@ -304,6 +306,7 @@ def get_my_bookings(
     current_user=Depends(get_current_user)
 ):
     try:
+        fixed_window_rate_limit(current_user.id,"get_my_bookings")
         bookings = db.query(Booking).filter(
             Booking.user_id == current_user.id
         ).all()
