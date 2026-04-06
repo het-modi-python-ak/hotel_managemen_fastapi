@@ -19,7 +19,7 @@ class Hotel(Base):
     
     
 
-    owner = relationship("User", back_populates="hotels")
+    owner = relationship("User", back_populates="hotels") #
     
    
 
