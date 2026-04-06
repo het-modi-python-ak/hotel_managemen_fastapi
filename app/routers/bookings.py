@@ -37,7 +37,7 @@ def create_booking(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user)
 ):
-    
+   
     # fixed_window_rate_limit(current_user.id,"create_booking")
     #  Validation Checks (Client Errors - 400)
     if booking_data.check_in < date.today():

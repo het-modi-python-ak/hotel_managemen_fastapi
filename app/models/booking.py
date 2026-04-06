@@ -21,7 +21,7 @@ class Booking(Base):
 
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    user = relationship("User", back_populates="bookings")
+    user = relationship("User", back_populates="bookings") # 
    
     hotel = relationship("Hotel", back_populates="bookings")
 
