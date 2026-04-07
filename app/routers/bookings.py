@@ -38,8 +38,7 @@ def create_booking(
     current_user=Depends(get_current_user)
 ):
    
-    # fixed_window_rate_limit(current_user.id,"create_booking")
-    #  Validation Checks (Client Errors - 400)
+    
     if booking_data.check_in < date.today():
         raise HTTPException(status_code=400, detail="Check-in cannot be in the past")
 

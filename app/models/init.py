@@ -8,3 +8,4 @@ from app.models.booking import Booking
 from app.models.booked_room import BookedRoom
 from app.models.booking_item import  BookingItem
 from app.models.association import user_roles, role_permissions
+from app.models.flight_models import Airport,Flight,Seat,FlightBooking,Passenger,SeatAllocation
