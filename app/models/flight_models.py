@@ -215,7 +215,7 @@ class FlightBooking(Base):
     booking_id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users2.id"))
     flight_id = Column(Integer, ForeignKey("flights.flight_id"))
-
+    seat_number = Column(String(10))
     status = Column(String(50), default="pending")
     total_price = Column(Integer)
 
@@ -226,6 +226,28 @@ class FlightBooking(Base):
     
     passengers = relationship("Passenger", back_populates="booking")
     flight = relationship("Flight", back_populates="bookings")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 class Passenger(Base):

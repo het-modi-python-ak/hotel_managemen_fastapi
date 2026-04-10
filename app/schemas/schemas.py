@@ -115,8 +115,14 @@ class BookingItemResponse(BaseModel):
 #     seat_id:int
     
     
-# class FlightBooking(BaseModel):
-#     flight_id:int
+class FlightBookingreposnse(BaseModel):
+    booking_id:int
+    flight_id:int
+    seat_number:str
+    status:str
+    total_price:int
+    created_by:int
+    
     
     
     
