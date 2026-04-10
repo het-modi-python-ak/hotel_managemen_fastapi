@@ -45,12 +45,15 @@ def get_all_airlines(db: Session = Depends(get_db)):
 @router.get("/my")
 def get_all_airlines(db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     try:
-        airlines = db.query(Airline,Airline.created_by==current_user.id).all()
+        airlines = db.query(Airline).filter(Airline.created_by==current_user.id).all()
         if not airlines:
             raise HTTPException(status_code=404, detail="No airlines found")
         return airlines
     except SQLAlchemyError:
         raise HTTPException(status_code=500, detail="Error fetching airlines from database")
+
+
+
 
 @router.get("/{airline_id}")
 def get_airline(airline_id: int, db: Session = Depends(get_db)):
