@@ -7,7 +7,11 @@ from app.core.dependencies import get_current_user
 from datetime import datetime,timezone
 from typing import List
 from app.schemas.schemas import FlightBookingreposnse
-
+from app.services.email_service import send_reminder_email
+from app.tasks.reminder_tasks import send_booking_reminder
+from app.models.user_email import User2
+from app.core.redis_client import redis_client
+import json
 
 router = APIRouter()
 
@@ -35,6 +39,17 @@ def book_seat(flight_id:int,seat_number:str,db:Session=Depends(get_db),current_u
         db.add(booking)
         db.commit()
         
+        user = db.query(User2).filter(User2.id==current_user.id).first()
+        
+        send_booking_reminder.apply_async(args=[user.email,booking.booking_id],countdown=10)
+       
+        
+        
+        #redis pubsub
+        
+        # event = {"type":"BOOKING_CREATED","user_email":current_user.email,"flight_number":flight.flight_number,"depart_time":str(flight.depart_time)}
+        # redis_client.publish("booking_channel",json.dumps(event))
+        
         return booking
 
         
@@ -49,6 +64,7 @@ def book_seat(flight_id:int,seat_number:str,db:Session=Depends(get_db),current_u
 def book_multiple_seats(
     flight_id: int,
     seat_numbers: List[str],  
+    name:str,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user)
 ):
@@ -210,3 +226,79 @@ def delete_booking(booking_id: int, db: Session = Depends(get_db), current_user=
     except SQLAlchemyError as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Database error: {e}")
+    
+    
+    
+    
+
+#update booking
+@router.put("/bookings/{booking_id}/swap-seat")
+def swap_single_seat(
+    booking_id: int, 
+    old_seat_number: str, 
+    new_seat_number: str, 
+    db: Session = Depends(get_db), 
+    current_user = Depends(get_current_user)
+):
+    try:
+        # Fetch the booking
+        booking = db.query(FlightBooking).filter(
+            FlightBooking.booking_id == booking_id,
+            FlightBooking.user_id == current_user.id
+        ).first()
+
+        if not booking:
+            raise HTTPException(status_code=404, detail="Booking not found")
+
+        #  Parse existing seats
+        # Assuming seat_number is stored as "A1,A2,A3"
+        current_seats = [s.strip() for s in booking.seat_number.split(",")]
+
+        if old_seat_number not in current_seats:
+            raise HTTPException(status_code=400, detail=f"Seat {old_seat_number} is not part of this booking")
+
+        #  Check if the new seat is available
+        new_seat = db.query(FlightSeat).filter(
+            FlightSeat.flight_id == booking.flight_id,
+            FlightSeat.seat_number == new_seat_number
+        ).first()
+
+        if not new_seat:
+            raise HTTPException(status_code=404, detail="New seat not found")
+        
+        if new_seat.is_booked:
+            raise HTTPException(status_code=400, detail="New seat is already occupied")
+
+        #  Release the OLD seat
+        old_seat = db.query(FlightSeat).filter(
+            FlightSeat.flight_id == booking.flight_id,
+            FlightSeat.seat_number == old_seat_number
+        ).first()
+        if old_seat:
+            old_seat.is_booked = False
+
+        #  Occupy the NEW seat
+        new_seat.is_booked = True
+
+        # Update the booking string 
+
+        updated_seats = [new_seat_number if s == old_seat_number else s for s in current_seats]
+        
+        # Calculate price difference
+        price_diff = new_seat.price - old_seat.price
+        booking.total_price += price_diff
+        booking.seat_number = ",".join(updated_seats)
+
+        db.commit()
+        db.refresh(booking)
+
+        return {
+            "message": f"Swapped {old_seat_number} for {new_seat_number}",
+            "updated_booking_id": booking.booking_id,
+            "current_seats": booking.seat_number,
+            "new_total_price": booking.total_price
+        }
+
+    except SQLAlchemyError as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
