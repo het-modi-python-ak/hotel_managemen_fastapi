@@ -104,7 +104,7 @@ def create_flight(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Flight number '{flight_number}' already exists."
-        )
+        ) 
     except HTTPException as he:
         db.rollback()
         raise he

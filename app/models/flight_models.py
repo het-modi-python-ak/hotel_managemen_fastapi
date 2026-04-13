@@ -196,7 +196,7 @@ class FlightSeat(Base):
     seat_id = Column(Integer, primary_key=True, index=True)
     flight_id = Column(Integer, ForeignKey("flights.flight_id"))
 
-    seat_number = Column(String(10))
+    seat_number = Column(String(100))
     seat_class = Column(String(50))
     price = Column(Integer)
 
@@ -218,6 +218,7 @@ class FlightBooking(Base):
     seat_number = Column(String(10))
     status = Column(String(50), default="pending")
     total_price = Column(Integer)
+    reminder_sent = Column(Boolean,default=False)
 
     created_by = Column(Integer, ForeignKey("users2.id"))
     created_at = Column(DateTime,default=datetime.now())

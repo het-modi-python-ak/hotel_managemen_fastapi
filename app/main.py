@@ -16,6 +16,11 @@ app.add_middleware(LoggingMiddleware)
 
 Base.metadata.create_all(bind=engine)  
 
+
+app.get("/")
+def home():
+    return {"message":"Flight booking api"}
+
 app.include_router(admin.router, prefix="/admin",tags=["admin"]) # Added prefix for clarity
 app.include_router(auth.router, prefix="/auth",tags=["auth"]) 
 app.include_router(permissions.router,prefix="/permissions",tags=["permissions"])
