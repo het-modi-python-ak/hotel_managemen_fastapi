@@ -1,24 +1,24 @@
 # hotel_managemen_fastapi
 
-API ENDPOINTS 
+###API ENDPOINTS 
 
-ADMIN 
+###ADMIN 
 POST admin/assing-role
 
-AUTH
+###AUTH
 POST auth/signup
 GET auth/verify
 POST auth/register
 POST auth/login
 GET auth
 
-PERMISSION
+###PERMISSION
 POST /permissions
 GET /permissions
 POST /permissions/assign_permission
 
 
-ROLES
+###ROLES
 POST /roles
 GET /roles
 GET /roles/users
@@ -27,7 +27,7 @@ PATCH /roles/{role_id}
 DELETE /roles/{role_id}
 
 
-HOTELS
+###HOTELS
 POST /hotels/
 GET /hotels/
 GET /hotels/my
@@ -36,14 +36,14 @@ PATCH /hotels/{hotel_id}
 DELETE /hotels/{hotel_id}
 
 
-ROOMS
+###ROOMS
 POST /rooms/{hotel_id}
 GET /rooms/{hotel_id}
 PATCH /rooms/{hotel_id}/{room_id}
 DELETE /rooms/{hotel_id}/{room_id}
 
 
-HOTEL BOOKING 
+###HOTEL BOOKING 
 GET /booking
 POST /booking
 PATCH /booking/{booking_id}
