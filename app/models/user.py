@@ -1,5 +1,5 @@
 
-from sqlalchemy import Column, Integer, String, DateTime,ForeignKey,Float
+from sqlalchemy import Column, Integer, String, DateTime,ForeignKey,Float,Boolean
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from app.database.database import Base
@@ -16,6 +16,8 @@ class User(Base):
     phone = Column(String(10))
     password = Column(String(255))
     created_at = Column(DateTime, default=datetime.now)
+    is_verified = Column(Boolean,default=True)
+
 
     roles = relationship("Role", secondary=user_roles, back_populates="users") #many to many
 

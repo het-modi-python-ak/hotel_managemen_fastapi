@@ -5,6 +5,7 @@ from app.database.database import get_db
 from app.models.flight_models import Airplane,Airline,FlightSeat,AirplaneSeat
 from app.core.dependencies import get_current_user
 from enum import Enum
+from pydantic import BaseModel
 
 router = APIRouter()
 
@@ -13,18 +14,37 @@ class SeatCategory(str, Enum):
     BUSINESS = "BUSINESS"
     ECONOMY = "ECONOMY"
     PREMIUM = "PREMIUM"
+    
+    
+    
+class CreateAirplane(BaseModel):
+    model: str
+    total_seats: int
+    airline_id: int
+    total_business_seat: int
+    total_economy_seat: int
+    total_premium_seat: int
 
 @router.post("/", status_code=status.HTTP_201_CREATED)
 def create_airplane(
-    model: str,
-    total_seats: int,
-    airline_id: int,
-    total_business_seat: int,
-    total_economy_seat: int,
-    total_premium_seat: int,
+    # model: str,
+    # total_seats: int,
+    # airline_id: int,
+    # total_business_seat: int,
+    # total_economy_seat: int,
+    # total_premium_seat: int,
+    data : CreateAirplane,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user)
 ):
+    
+    model = data.model
+    total_seats = data.total_seats
+    airline_id = data.airline_id
+    total_business_seat = data.total_business_seat
+    total_economy_seat = data.total_economy_seat
+    total_premium_seat = data.total_premium_seat
+
 
     if total_seats <= 0:
         raise HTTPException(
@@ -147,15 +167,27 @@ def get_airplane(
 
 
 
+
+class UpdateAirple(BaseModel):
+    airplane_id: int
+    model: str | None = None,
+    total_seats: int | None = None
+
+
 @router.patch("/{airplane_id}")
 def update_airplane(
-    airplane_id: int,
-    model: str | None = None,
-    total_seats: int | None = None,
+    # airplane_id: int,
+    # model: str | None = None,
+    # total_seats: int | None = None,
+    data : UpdateAirple,
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
     try:
+        
+        airplane_id = data.airplane_id
+        model = data.model
+        total_seats = data.total_seats
         
         
         

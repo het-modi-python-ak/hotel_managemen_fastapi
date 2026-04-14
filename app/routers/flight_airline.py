@@ -4,17 +4,25 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.database.database import get_db
 from app.models.flight_models import Airline
 from app.core.dependencies import get_current_user
+from pydantic import BaseModel
 
 router = APIRouter()
 
+class CreateArline(BaseModel):
+    name:str
+    country:str
+
 @router.post("/", status_code=status.HTTP_201_CREATED)
 def create_airline(
-    name: str,
-    country: str,
+    # name: str,
+    # country: str,
+    data : CreateArline,
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
     try:
+        name = data.name
+        country = data.country
         existing_airline = db.query(Airline).filter(Airline.name == name).first()
         if existing_airline:
             raise HTTPException(status_code=400, detail="Airline already exists")
@@ -66,16 +74,25 @@ def get_airline(airline_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail="Error fetching airline details")
 
 
+class UpdateArline(BaseModel):
+    airline_id:int
+    name:str | None = None
+    country: str | None = None
 
 @router.patch("/{airline_id}")
 def update_airline(
-    airline_id: int,
-    name: str | None = None,
-    country: str | None = None,
+    # airline_id: int,
+    # name: str | None = None,
+    # country: str | None = None,
+    data : UpdateArline,
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
     try:
+        airline_id = data.airline_id
+        name = data.name
+        country = data.country
+        
         airline = db.query(Airline).filter(Airline.airline_id == airline_id,Airline.created_by==current_user.id).first()
         if not airline:
             raise HTTPException(status_code=404, detail="Airline not found")

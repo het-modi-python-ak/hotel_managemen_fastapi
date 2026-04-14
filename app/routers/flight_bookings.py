@@ -15,60 +15,72 @@ import json
 
 router = APIRouter()
 
-@router.post("/",response_model=FlightBookingreposnse)
-def book_seat(flight_id:int,seat_number:str,db:Session=Depends(get_db),current_user = Depends(get_current_user)):
-    try:
-        flight = db.query(Flight).filter(Flight.flight_id==flight_id).first()
+@router.get("/time")
+def get_current_time():
+    return datetime.now()
 
-        if not flight:
-            raise HTTPException(status_code=404,detail="No flight found with this id")
+# @router.post("/",response_model=FlightBookingreposnse)
+# def book_seat(flight_id:int,seat_number:str,db:Session=Depends(get_db),current_user = Depends(get_current_user)):
+#     try:
+#         flight = db.query(Flight).filter(Flight.flight_id==flight_id).first()
+
+#         if not flight:
+#             raise HTTPException(status_code=404,detail="No flight found with this id")
 
         
-        seat = db.query(FlightSeat).filter(FlightSeat.seat_number==seat_number).first()
+#         seat = db.query(FlightSeat).filter(FlightSeat.seat_number==seat_number).first()
 
-        if not seat:
-            raise HTTPException(status_code=404,detail="No seats found with this number")
+#         if not seat:
+#             raise HTTPException(status_code=404,detail="No seats found with this number")
 
-        if seat.is_booked != 0 :
-            raise HTTPException(status_code=404,detail="Seat not available for now")
+#         if seat.is_booked != 0 :
+#             raise HTTPException(status_code=404,detail="Seat not available for now")
         
         
-        booking = FlightBooking( flight_id=flight_id,user_id = current_user.id , seat_number = seat_number,total_price =  seat.price,created_by=current_user.id)
-        seat.is_booked=True
+#         booking = FlightBooking( flight_id=flight_id,user_id = current_user.id , seat_number = seat_number,total_price =  seat.price,created_by=current_user.id)
+#         seat.is_booked=True
         
-        db.add(booking)
-        db.commit()
+#         db.add(booking)
+#         db.commit()
         
-        user = db.query(User2).filter(User2.id==current_user.id).first()
+#         user = db.query(User2).filter(User2.id==current_user.id).first()
         
-        send_booking_reminder.apply_async(args=[user.email,booking.booking_id],countdown=10)
+#         send_booking_reminder.apply_async(args=[user.email,booking.booking_id],countdown=10)
        
         
         
-        #redis pubsub
+#         #redis pubsub
         
-        # event = {"type":"BOOKING_CREATED","user_email":current_user.email,"flight_number":flight.flight_number,"depart_time":str(flight.depart_time)}
-        # redis_client.publish("booking_channel",json.dumps(event))
+#         # event = {"type":"BOOKING_CREATED","user_email":current_user.email,"flight_number":flight.flight_number,"depart_time":str(flight.depart_time)}
+#         # redis_client.publish("booking_channel",json.dumps(event))
         
-        return booking
+#         return booking
 
         
-    except SQLAlchemyError as e:
+#     except SQLAlchemyError as e:
 
-        raise HTTPException(status_code=404,detail=f"Database error : {e}" )
+#         raise HTTPException(status_code=404,detail=f"Database error : {e}" )
 
+from pydantic import BaseModel
 
-
-
-@router.post("/book-multiple")
+class Bookseats(BaseModel):
+    flight_id:int
+    seat_numbers:List[str]
+    
+    
+@router.post("/")
 def book_multiple_seats(
-    flight_id: int,
-    seat_numbers: List[str],  
-    name:str,
+    # flight_id: int,
+    # seat_numbers: List[str], 
+    data : Bookseats, 
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user)
 ):
     try:
+        flight_id = data.flight_id
+        seat_numbers = data.seat_numbers
+    
+        
        
         flight = db.query(Flight).filter(Flight.flight_id == flight_id).first()
         if not flight:
@@ -229,18 +241,29 @@ def delete_booking(booking_id: int, db: Session = Depends(get_db), current_user=
     
     
     
-    
+ 
+class UpdateSeat(BaseModel):
+    booking_id: int 
+    old_seat_number: str 
+    new_seat_number: str
+        
 
 #update booking
 @router.put("/bookings/{booking_id}/swap-seat")
 def swap_single_seat(
-    booking_id: int, 
-    old_seat_number: str, 
-    new_seat_number: str, 
+    # booking_id: int, 
+    # old_seat_number: str, 
+    # new_seat_number: str, 
+    data : UpdateSeat,
     db: Session = Depends(get_db), 
     current_user = Depends(get_current_user)
 ):
     try:
+        
+        booking_id = data.booking_id
+        old_seat_number = data.old_seat_number
+        new_seat_number = data.new_seat_number
+        
         # Fetch the booking
         booking = db.query(FlightBooking).filter(
             FlightBooking.booking_id == booking_id,
