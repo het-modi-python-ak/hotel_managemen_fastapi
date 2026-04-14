@@ -31,10 +31,11 @@ from app.models.user_email import User2
 def send_booking_reminder(email:str,booking_id:int):
     send_reminder_email(email,booking_id)
     
-    
+@celery.task   
 def check_flight_reminders():
+    print("checking flight reminders ... ")
     db:Session = SessionLocal()
-    now = datetime.utcnow()
+    now = datetime.now()
     target  = not + timedelta(minutes=10)
     bookings = (db.query(FlightBooking)).join(Flight).filter(Flight.depart_time>=now,Flight.depart_time<=target,FlightBooking.reminder_sent==False).all()
     user = db.query(User2).filter(User2.id==booking.created_by).first()

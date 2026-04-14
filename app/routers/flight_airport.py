@@ -4,14 +4,30 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.database.database import get_db
 from app.models.flight_models import Airport 
 from app.core.dependencies import get_current_user
-
+from pydantic import BaseModel
 
 router = APIRouter()
 
 
+class CreateAirport(BaseModel):
+    code:str
+    name:str
+    location:str
+    country:str
+
+
+
 @router.post("/") 
-def create_airport(code:str,name:str,location:str,country:str,db:Session=Depends(get_db),current_user=Depends(get_current_user)):
+def create_airport(
+    # code:str,name:str,location:str,country:str
+                   data : CreateAirport,db:Session=Depends(get_db),current_user=Depends(get_current_user)):
     try:
+        
+        code = data.code
+        name = data.name
+        location = data.location
+        country = data.country
+        
         existing_airport=db.query(Airport).filter(Airport.code==code).first()
 
         if existing_airport:

@@ -28,9 +28,15 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         raise credentials_exception
 
     user = db.query(User).filter(User.id == user_id).first()
-    if not user:
+    user2 = db.query(User2).filter(User2.id == user_id).first()
+    if not user and not user2 :
         raise credentials_exception 
+    
+    if not user:
+        return user2
     return user
+    # if not user:
+    #     return user2
 
 
 

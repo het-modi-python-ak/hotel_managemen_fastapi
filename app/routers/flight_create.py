@@ -6,22 +6,41 @@ from app.models.flight_models import Flight, AirplaneSeat, Airplane, FlightSeat
 from app.core.dependencies import get_current_user
 from datetime import datetime
 from typing import List
+from pydantic import BaseModel
 
 router = APIRouter()
 
 
+class CreateFlight(BaseModel):
+    flight_number: str
+    airplane_id: int
+    source_id: int
+    destination_id: int
+    depart_time: datetime
+    arrival_time: datetime
+    
+
+
 @router.post("/", status_code=status.HTTP_201_CREATED)
 def create_flight(
-    flight_number: str,
-    airplane_id: int,
-    source_id: int,
-    destination_id: int,
-    depart_time: datetime,
-    arrival_time: datetime,
+    # flight_number: str,
+    # airplane_id: int,
+    # source_id: int,
+    # destination_id: int,
+    # depart_time: datetime,
+    # arrival_time: datetime,
+    data : CreateFlight,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user)
 ):
     try:
+        flight_number = data.flight_number
+        airplane_id = data.airplane_id
+        source_id = data.source_id
+        destination_id = data.destination_id
+        depart_time = data.depart_time
+        arrival_time = data.arrival_time
+        
         #date validation
         if depart_time >= arrival_time:
             raise HTTPException(
