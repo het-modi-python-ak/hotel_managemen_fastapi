@@ -1,6 +1,6 @@
 # hotel_managemen_fastapi
 
-#API ENDPOINTS 
+API ENDPOINTS 
 
 ADMIN 
 POST admin/assing-role
