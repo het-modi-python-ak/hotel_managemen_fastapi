@@ -23,6 +23,12 @@ from app.core.rate_limiter import fixed_window_rate_limit
 from app.tasks.reminder_tasks import send_booking_reminder
 from app.models.user_email import User2
 
+from typing import Annotated
+SessionDep = Annotated[Session, Depends(get_db)]
+CurretUser = Annotated[User,Depends(get_current_user)]
+
+
+
 router = APIRouter()
 
 LOCK_TIME = 10  # time for booking
@@ -34,9 +40,8 @@ logger = logging.getLogger(__name__)
 @router.post("/", status_code=status.HTTP_201_CREATED)
 def create_booking(
     booking_data: BookingCreate,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user)
-):
+    db: SessionDep,
+    current_user:CurretUser):
    
     
     if booking_data.check_in < date.today():
@@ -181,8 +186,8 @@ def create_booking(
 def confirm_booking(
     booking_id: int,
     background_tasks : BackgroundTasks,
-    db: Session = Depends(get_db), 
-    current_user=Depends(get_current_user)
+    db: SessionDep, 
+    current_user:CurretUser
 ):
     try:
         #  Fetch Booking
@@ -252,7 +257,7 @@ def confirm_booking(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An unexpected error occurred."
+            detail=f"An unexpected error occurred. {e}"
         )
 
 
@@ -263,8 +268,8 @@ def confirm_booking(
 def cancel_booking(
     booking_id: int,
     background_tasks:BackgroundTasks,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user)
+    db: SessionDep,
+    current_user:CurretUser
 ):
     try:
         booking = db.query(Booking).filter(Booking.booking_id == booking_id).first()
@@ -309,8 +314,8 @@ def cancel_booking(
 # Get all bookings for current user
 @router.get("/")
 def get_my_bookings(
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user)
+    db: SessionDep,
+    current_user:CurretUser
 ):
     try:
         fixed_window_rate_limit(current_user.id,"get_my_bookings")
@@ -330,8 +335,8 @@ def get_my_bookings(
 @router.get("/{booking_id}") 
 def get_booking_details(
     booking_id: int,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user)
+    db: SessionDep,
+    current_user:CurretUser
 ):
     try:
         booking = db.query(Booking).filter(
@@ -384,8 +389,8 @@ def get_booking_details(
 #for cancelling all pending bookings for tetsting propese 
 @router.post("/test/cancel_all_pending")
 def cancel_all_pending_bookings(
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user)
+    db: SessionDep,
+    current_user:CurretUser
 ):
     
   
@@ -429,8 +434,8 @@ def cancel_all_pending_bookings(
 #for cancelling all pending bookings for tetsting propese 
 @router.post("/test/cancel_all_confirm")
 def cancel_all_pending_bookings(
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user)
+    db: SessionDep,
+    current_user:CurretUser
 ):
     
     #Find all pending bookings for the user

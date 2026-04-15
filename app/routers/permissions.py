@@ -4,12 +4,16 @@ from app.database.database import get_db
 from app.models.permission import Permission
 from app.models.role import Role
 from app.models.permission import Permission
+from typing import Annotated
+SessionDep = Annotated[Session, Depends(get_db)]
+
+router = APIRouter()
 
 router = APIRouter()
 
 
 @router.post("/")
-def create_permission(name: str, db: Session = Depends(get_db)):
+def create_permission(name: str, db: SessionDep):
 
     permission = Permission(name=name)
 
@@ -22,7 +26,7 @@ def create_permission(name: str, db: Session = Depends(get_db)):
 
 
 @router.get("/")
-def get_permissions(db: Session = Depends(get_db)):
+def get_permissions(db: SessionDep):
     permissions = db.query(Permission).all()
     return [
         {
@@ -36,7 +40,7 @@ def get_permissions(db: Session = Depends(get_db)):
 
 
 @router.post("/assign_permission")
-def assign_permission(role_id: int, permission_id: int, db: Session = Depends(get_db)):
+def assign_permission(role_id: int, permission_id: int, db: SessionDep):
 
     role = db.query(Role).filter(Role.id == role_id).first()
     permission = db.query(Permission).filter(Permission.id == permission_id).first()

@@ -6,24 +6,18 @@ from app.models.flight_models import Airplane,Airline,FlightSeat,AirplaneSeat
 from app.core.dependencies import get_current_user
 from enum import Enum
 from pydantic import BaseModel
+from app.schemas.schemas import SeatCategory,CreateAirplane
+
+from typing import Annotated
+from app.models.user import User
+
+SessionDep = Annotated[Session, Depends(get_db)]
+CurretUser = Annotated[User,Depends(get_current_user)]
+
 
 router = APIRouter()
 
 
-class SeatCategory(str, Enum):
-    BUSINESS = "BUSINESS"
-    ECONOMY = "ECONOMY"
-    PREMIUM = "PREMIUM"
-    
-    
-    
-class CreateAirplane(BaseModel):
-    model: str
-    total_seats: int
-    airline_id: int
-    total_business_seat: int
-    total_economy_seat: int
-    total_premium_seat: int
 
 @router.post("/", status_code=status.HTTP_201_CREATED)
 def create_airplane(
@@ -34,8 +28,8 @@ def create_airplane(
     # total_economy_seat: int,
     # total_premium_seat: int,
     data : CreateAirplane,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user)
+    db: SessionDep,
+    current_user:CurretUser
 ):
     
     model = data.model
@@ -138,7 +132,7 @@ def create_airplane(
 
 @router.get("/")
 def get_all_airplanes(
-    db: Session = Depends(get_db),
+    db: SessionDep,
    
 ):
     try:
@@ -154,7 +148,7 @@ def get_all_airplanes(
 @router.get("/{airplane_id}")
 def get_airplane(
     airplane_id: int,
-    db: Session = Depends(get_db),
+    db: SessionDep,
   
 ):
     try:
@@ -180,7 +174,7 @@ def update_airplane(
     # model: str | None = None,
     # total_seats: int | None = None,
     data : UpdateAirple,
-    db: Session = Depends(get_db),
+    db: SessionDep,
     current_user = Depends(get_current_user)
 ):
     try:
@@ -216,7 +210,7 @@ def update_airplane(
 @router.delete("/{airplane_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_airplane(
     airplane_id: int,
-    db: Session = Depends(get_db),
+    db: SessionDep,
     current_user = Depends(get_current_user)
 ):
     try:

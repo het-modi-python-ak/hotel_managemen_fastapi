@@ -3,8 +3,7 @@ from fastapi import HTTPException,status
 from app.core.redis_client import redis_client
 import uuid
 
-# RATE_LIMIT=5
-# WINDOW_SIZE=10
+
 request_store={}
 
 

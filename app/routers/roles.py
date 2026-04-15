@@ -3,11 +3,14 @@ from sqlalchemy.orm import Session
 from app.database.database import get_db
 from app.models.role import Role
 from app.models.user import User
+from app.models.user import User
+from typing import Annotated
+SessionDep = Annotated[Session, Depends(get_db)]
 
 router = APIRouter()
 
 @router.post("/")
-def create_role(name: str, db: Session = Depends(get_db)):
+def create_role(name: str, db: SessionDep):
     role = Role(name=name)
     db.add(role)
     db.commit()
@@ -16,13 +19,13 @@ def create_role(name: str, db: Session = Depends(get_db)):
 
 # get all roles
 @router.get("/")
-def get_roles(db: Session = Depends(get_db)):
+def get_roles(db: SessionDep):
     role = db.query(Role).all()
     return role
 
 # get users with their roles
 @router.get("/users")
-def get_users(db: Session = Depends(get_db)):
+def get_users(db: SessionDep):
     users = db.query(User).all()
     result = []
     for user in users:
@@ -41,7 +44,7 @@ def get_users(db: Session = Depends(get_db)):
 
 # get a single role by ID
 @router.get("/{role_id}")
-def get_role(role_id: int, db: Session = Depends(get_db)):
+def get_role(role_id: int, db: SessionDep):
     role = db.query(Role).filter(Role.id == role_id).first()
     if role is None:
         raise HTTPException(status_code=404, detail="Role not found")
@@ -49,7 +52,7 @@ def get_role(role_id: int, db: Session = Depends(get_db)):
 
 # update a role by ID
 @router.patch("/{role_id}")
-def update_role(role_id: int, name: str, db: Session = Depends(get_db)):
+def update_role(role_id: int, name: str, db: SessionDep):
     role = db.query(Role).filter(Role.id == role_id).first()
     if role is None:
         raise HTTPException(status_code=404, detail="Role not found")
@@ -61,7 +64,7 @@ def update_role(role_id: int, name: str, db: Session = Depends(get_db)):
 
 # delete a role by ID
 @router.delete("/{role_id}")
-def delete_role(role_id: int, db: Session = Depends(get_db)):
+def delete_role(role_id: int, db: SessionDep):
     role = db.query(Role).filter(Role.id == role_id).first()
     if role is None:
         raise HTTPException(status_code=404, detail="Role not found")

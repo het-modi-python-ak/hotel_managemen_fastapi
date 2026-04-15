@@ -7,18 +7,19 @@ from app.core.dependencies import get_current_user
 from datetime import datetime
 from typing import List
 from pydantic import BaseModel
+from app.schemas.schemas import CreateFlight
+from datetime import datetime, timezone
+from typing import Annotated
+from app.models.user import User
+
+SessionDep = Annotated[Session, Depends(get_db)]
+CurretUser = Annotated[User,Depends(get_current_user)]
+
 
 router = APIRouter()
 
 
-class CreateFlight(BaseModel):
-    flight_number: str
-    airplane_id: int
-    source_id: int
-    destination_id: int
-    depart_time: datetime
-    arrival_time: datetime
-    
+
 
 
 @router.post("/", status_code=status.HTTP_201_CREATED)
@@ -30,8 +31,8 @@ def create_flight(
     # depart_time: datetime,
     # arrival_time: datetime,
     data : CreateFlight,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user)
+    db: SessionDep,
+    current_user:CurretUser
 ):
     try:
         flight_number = data.flight_number
@@ -48,7 +49,7 @@ def create_flight(
                 detail="Arrival time must be after departure time."
             )
         
-        if depart_time < datetime.utcnow():
+        if depart_time < datetime.now(timezone.utc):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Departure time cannot be in the past."
@@ -134,7 +135,7 @@ def create_flight(
 
 
 @router.get("/")
-def get_all_flights(db: Session = Depends(get_db)):
+def get_all_flights(db: SessionDep):
     flights = db.query(Flight).all()
     if not flights:
         raise HTTPException(status_code=404, detail="No flights found")
@@ -144,7 +145,7 @@ def get_all_flights(db: Session = Depends(get_db)):
 
 
 @router.get("/me")
-def get_all_flights(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+def get_all_flights(db: SessionDep, current_user:CurretUser):
     flights = db.query(Flight).filter(Flight.created_by == current_user.id).all()
     if not flights:
         raise HTTPException(status_code=404, detail="No flights found")
@@ -155,8 +156,8 @@ def get_all_flights(db: Session = Depends(get_db), current_user=Depends(get_curr
 @router.delete("/{flight_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_flight(
     flight_id: int, 
-    db: Session = Depends(get_db), 
-    current_user=Depends(get_current_user)
+    db: SessionDep, 
+    current_user:CurretUser
 ):
     
     flight = db.query(Flight).filter(
