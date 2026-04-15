@@ -8,27 +8,40 @@ from pydantic import BaseModel
 from typing import Optional
 from app.core.rate_limiter import fixed_window_rate_limit,sliding_window_rate_limiter
 
-class HotelUpdate(BaseModel):
-    name: Optional[str] = None
-    address: Optional[str] = None
-    city: Optional[str] = None
-    state: Optional[StateEnum] = None
-    country: Optional[CountryEnum] = None
+from app.schemas.schemas import HotelUpdate
+from pydantic import BaseModel
+from app.schemas.schemas import CreateHotel
+from typing import Annotated
+from app.models.user import User
+
+SessionDep = Annotated[Session, Depends(get_db)]
+CurretUser = Annotated[User,Depends(get_current_user)]
+
 
 router = APIRouter()
 
+
+
+
 @router.post("/")
 def create_hotel(
-    name: str,
-    address: str,
-    city: str,
-    state: StateEnum,
-    country: CountryEnum,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    # name: str,
+    # address: str,
+    # city: str,
+    # state: StateEnum,
+    # country: CountryEnum,
+    data : CreateHotel,
+    db: SessionDep,
+    current_user:CurretUser,
     # user = Depends(require_permission("add_hotel"))   #permission endpoint
 
 ):
+    name = data.name
+    address = data.address
+    city= data.city
+    state = data.state
+    country = data.country
+    
     hotel = Hotel(
         name=name,
         address=address,
@@ -43,7 +56,7 @@ def create_hotel(
     return hotel
 
 @router.get("/")
-def get_all_hotels(request:Request,db: Session = Depends(get_db),current_user=Depends(get_current_user)):
+def get_all_hotels(request:Request,db: SessionDep,current_user:CurretUser):
     
     client_host = request.client.host
     
@@ -55,8 +68,8 @@ def get_all_hotels(request:Request,db: Session = Depends(get_db),current_user=De
 
 @router.get("/my")
 def get_my_hotels(
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user)
+    db: SessionDep,
+    current_user:CurretUser
 ):
     hotels = db.query(Hotel).filter(
         Hotel.owner_id == current_user.id
@@ -64,7 +77,7 @@ def get_my_hotels(
     return hotels
 
 @router.get("/{hotel_id}")
-def get_hotel(hotel_id: int, db: Session = Depends(get_db)):
+def get_hotel(hotel_id: int, db: SessionDep):
     hotel = db.query(Hotel).filter(
         Hotel.hotel_id == hotel_id
     ).first()
@@ -78,8 +91,8 @@ def get_hotel(hotel_id: int, db: Session = Depends(get_db)):
 def update_hotel(
     hotel_id: int,
     hotel_update: HotelUpdate,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user)
+    db: SessionDep,
+    current_user:CurretUser
 ):
     hotel = db.query(Hotel).filter(
         Hotel.hotel_id == hotel_id,
@@ -100,8 +113,8 @@ def update_hotel(
 @router.delete("/{hotel_id}")
 def delete_hotel(
     hotel_id: int,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user)
+    db: SessionDep,
+    current_user:CurretUser
 ):
     hotel = db.query(Hotel).filter(
         Hotel.hotel_id == hotel_id,

@@ -12,6 +12,12 @@ from app.tasks.reminder_tasks import send_booking_reminder
 from app.models.user_email import User2
 from app.core.redis_client import redis_client
 import json
+from typing import Annotated
+from app.models.user import User
+
+SessionDep = Annotated[Session, Depends(get_db)]
+CurretUser = Annotated[User,Depends(get_current_user)]
+
 
 router = APIRouter()
 
@@ -19,53 +25,10 @@ router = APIRouter()
 def get_current_time():
     return datetime.now()
 
-# @router.post("/",response_model=FlightBookingreposnse)
-# def book_seat(flight_id:int,seat_number:str,db:Session=Depends(get_db),current_user = Depends(get_current_user)):
-#     try:
-#         flight = db.query(Flight).filter(Flight.flight_id==flight_id).first()
 
-#         if not flight:
-#             raise HTTPException(status_code=404,detail="No flight found with this id")
-
-        
-#         seat = db.query(FlightSeat).filter(FlightSeat.seat_number==seat_number).first()
-
-#         if not seat:
-#             raise HTTPException(status_code=404,detail="No seats found with this number")
-
-#         if seat.is_booked != 0 :
-#             raise HTTPException(status_code=404,detail="Seat not available for now")
-        
-        
-#         booking = FlightBooking( flight_id=flight_id,user_id = current_user.id , seat_number = seat_number,total_price =  seat.price,created_by=current_user.id)
-#         seat.is_booked=True
-        
-#         db.add(booking)
-#         db.commit()
-        
-#         user = db.query(User2).filter(User2.id==current_user.id).first()
-        
-#         send_booking_reminder.apply_async(args=[user.email,booking.booking_id],countdown=10)
-       
-        
-        
-#         #redis pubsub
-        
-#         # event = {"type":"BOOKING_CREATED","user_email":current_user.email,"flight_number":flight.flight_number,"depart_time":str(flight.depart_time)}
-#         # redis_client.publish("booking_channel",json.dumps(event))
-        
-#         return booking
-
-        
-#     except SQLAlchemyError as e:
-
-#         raise HTTPException(status_code=404,detail=f"Database error : {e}" )
 
 from pydantic import BaseModel
-
-class Bookseats(BaseModel):
-    flight_id:int
-    seat_numbers:List[str]
+from app.schemas.schemas import Bookseats
     
     
 @router.post("/")
@@ -73,8 +36,8 @@ def book_multiple_seats(
     # flight_id: int,
     # seat_numbers: List[str], 
     data : Bookseats, 
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user)
+    db: SessionDep,
+    current_user:CurretUser
 ):
     try:
         flight_id = data.flight_id
@@ -165,7 +128,7 @@ def get_available_seat(flight_id:int,db:Session=Depends(get_db)):
     
 #get my booking
 @router.get("/bookings")
-def get_all_bookings(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+def get_all_bookings(db: SessionDep, current_user:CurretUser):
   
     try:
         bookings = db.query(FlightBooking).filter(FlightBooking.created_by == current_user.id).all()
@@ -177,7 +140,7 @@ def get_all_bookings(db: Session = Depends(get_db), current_user=Depends(get_cur
 
 #delete booking 
 @router.delete("/bookings/{booking_id}")
-def delete_booking(booking_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+def delete_booking(booking_id: int, db: SessionDep, current_user:CurretUser):
     
     try:
         #find the flight 
@@ -255,7 +218,7 @@ def swap_single_seat(
     # old_seat_number: str, 
     # new_seat_number: str, 
     data : UpdateSeat,
-    db: Session = Depends(get_db), 
+    db: SessionDep, 
     current_user = Depends(get_current_user)
 ):
     try:

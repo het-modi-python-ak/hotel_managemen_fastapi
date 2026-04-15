@@ -5,22 +5,25 @@ from app.database.database import get_db
 from app.models.flight_models import Airport 
 from app.core.dependencies import get_current_user
 from pydantic import BaseModel
+from app.schemas.schemas import CreateAirport
+
+from typing import Annotated
+from app.models.user import User
+
+SessionDep = Annotated[Session, Depends(get_db)]
+CurretUser = Annotated[User,Depends(get_current_user)]
+
 
 router = APIRouter()
 
 
-class CreateAirport(BaseModel):
-    code:str
-    name:str
-    location:str
-    country:str
 
 
 
 @router.post("/") 
 def create_airport(
     # code:str,name:str,location:str,country:str
-                   data : CreateAirport,db:Session=Depends(get_db),current_user=Depends(get_current_user)):
+                   data : CreateAirport,db:SessionDep,current_user:CurretUser):
     try:
         
         code = data.code
@@ -50,12 +53,12 @@ from typing import List
 
 # GET: Retrieve all airports
 @router.get("/")
-def get_airports(db: Session = Depends(get_db)):
+def get_airports(db: SessionDep):
     return db.query(Airport).all()
 
 # GET: Retrieve a single airport by its code
 @router.get("/{airport_code}")
-def get_airport(airport_code: str, db: Session = Depends(get_db)):
+def get_airport(airport_code: str, db: SessionDep):
     airport = db.query(Airport).filter(Airport.code == airport_code).first()
     if not airport:
         raise HTTPException(status_code=404, detail="Airport not found")

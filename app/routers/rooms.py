@@ -6,6 +6,13 @@ from app.models.hotel import Hotel
 from app.models.room_type import RoomType 
 from app.core.dependencies import get_current_user
 from typing import Optional
+from typing import Annotated
+from app.models.user import User
+
+SessionDep = Annotated[Session, Depends(get_db)]
+CurretUser = Annotated[User,Depends(get_current_user)]
+
+
 router = APIRouter()
 
 @router.post("/{hotel_id}", status_code=status.HTTP_201_CREATED)
@@ -14,8 +21,8 @@ def create_room(
     room_type: RoomType,
     price: float,
     total_rooms: int,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user)
+    db: SessionDep,
+    current_user:CurretUser
 ):
     hotel = db.query(Hotel).filter(
         Hotel.hotel_id == hotel_id
@@ -52,7 +59,7 @@ def create_room(
     return room
 
 @router.get("/{hotel_id}")
-def get_rooms(hotel_id: int, db: Session = Depends(get_db)):
+def get_rooms(hotel_id: int, db: SessionDep):
     rooms = db.query(Room).filter(
         Room.hotel_id == hotel_id
     ).all()
@@ -62,11 +69,13 @@ def get_rooms(hotel_id: int, db: Session = Depends(get_db)):
 @router.patch("/{hotel_id}/{room_id}")
 def update_room(
     hotel_id: int,
-    room_id: int,
+    room_id: int, 
+    db: SessionDep,
+    current_user:CurretUser,
     price: Optional[float] = None,
     total_rooms: Optional[int] = None,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user)
+   
+    
 ):
     #  Check if the hotel exists and belongs to the user
     hotel = db.query(Hotel).filter(
@@ -112,8 +121,8 @@ def update_room(
 def delete_room(
     hotel_id:int,
     room_id: int,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user)
+    db: SessionDep,
+    current_user:CurretUser
 ):
     hotel = db.query(Room).filter(Room.hotel_id==hotel_id).all()
     

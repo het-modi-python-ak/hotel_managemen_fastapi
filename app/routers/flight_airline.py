@@ -5,20 +5,25 @@ from app.database.database import get_db
 from app.models.flight_models import Airline
 from app.core.dependencies import get_current_user
 from pydantic import BaseModel
+from app.schemas.schemas import CreateArline
+from typing import Annotated
+from app.models.user import User
+
+SessionDep = Annotated[Session, Depends(get_db)]
+CurretUser = Annotated[User,Depends(get_current_user)]
+
 
 router = APIRouter()
 
-class CreateArline(BaseModel):
-    name:str
-    country:str
+
 
 @router.post("/", status_code=status.HTTP_201_CREATED)
 def create_airline(
     # name: str,
     # country: str,
     data : CreateArline,
-    db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    db: SessionDep,
+    current_user :CurretUser
 ):
     try:
         name = data.name
@@ -39,7 +44,7 @@ def create_airline(
 
 
 @router.get("/")
-def get_all_airlines(db: Session = Depends(get_db)):
+def get_all_airlines(db: SessionDep):
     try:
         airlines = db.query(Airline).all()
         if not airlines:
@@ -51,7 +56,7 @@ def get_all_airlines(db: Session = Depends(get_db)):
 
 
 @router.get("/my")
-def get_all_airlines(db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+def get_all_airlines(db: SessionDep, current_user :CurretUser):
     try:
         airlines = db.query(Airline).filter(Airline.created_by==current_user.id).all()
         if not airlines:
@@ -64,7 +69,7 @@ def get_all_airlines(db: Session = Depends(get_db), current_user = Depends(get_c
 
 
 @router.get("/{airline_id}")
-def get_airline(airline_id: int, db: Session = Depends(get_db)):
+def get_airline(airline_id: int, db: SessionDep):
     try:
         airline = db.query(Airline).filter(Airline.airline_id == airline_id).first()
         if not airline:
@@ -85,8 +90,8 @@ def update_airline(
     # name: str | None = None,
     # country: str | None = None,
     data : UpdateArline,
-    db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    db: SessionDep,
+    current_user :CurretUser
 ):
     try:
         airline_id = data.airline_id
@@ -116,7 +121,7 @@ def update_airline(
 
 
 @router.delete("/{airline_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_airline(airline_id: int, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+def delete_airline(airline_id: int,current_user: CurretUser, db: Session = Depends(get_db)):
     try:
         airline = db.query(Airline).filter(Airline.airline_id == airline_id,Airline.created_by==current_user.id).first()
         if not airline:
