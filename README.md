@@ -1,22 +1,30 @@
 # hotel_managemen_fastapi
+#### Features
+- JWT based auth 
+- Hotel Booking sytem
+- Flight Booking system
+- create hotel , room and booking seats
+- create airports, airlines, flights and booking seats
+- sending notifactions to users for reminder ,conformation , cancellation 
+
 
 
 
 
 ### tech satck
-Python 3.11+
-FastAPI
-SQLAlchemy + Alembic
-PostgreSQL
-Redis
-Celery (worker + beat scheduler)
+<br> Python 3.11+
+<br> FastAPI
+<br> SQLAlchemy + Alembic
+<br> PostgreSQL
+<br> Redis
+<br> Celery (worker + beat scheduler)
 
 ### Getting Started
 
     Clone the repo
-    Install dependencies: npm install or pip install -r requirements.txt
+    Install dependencies:  pip install -r requirements.txt
     Environment Variables: Create a .env file with DATABASE_URL, DATABASE_PASSWORD, DATBASE_HOST,EMAIL,EMAIL_PASSOWRD, and JWT_SECRET.
-    Run: npm start or uvicorn main:app 
+    Run:  uvicorn main:app 
 
 ### API ENDPOINTS 
 
