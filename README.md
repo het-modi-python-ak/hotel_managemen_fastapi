@@ -1,86 +1,274 @@
-# hotel_managemen_fastapi
-#### Features
-- JWT based auth 
-- Hotel Booking sytem
-- Flight Booking system
-- create hotel , room and booking seats
-- create airports, airlines, flights and booking seats
-- sending notifactions to users for reminder ,conformation , cancellation 
+Hotel & Flight Booking System (FastAPI)
+
+A scalable backend system for managing hotel and flight bookings, built with FastAPI.
+The project demonstrates production-style backend architecture including authentication, role-based access control, background task processing, and notification scheduling.
+
+---
+
+Features
+
+Authentication & Authorization
+
+- JWT-based authentication
+- Email verification during registration
+- Role-Based Access Control (RBAC)
+- Permission management system
+- Admin role assignment
+
+Hotel Management
+
+- Create and manage hotels
+- Create and manage hotel rooms
+- Hotel booking system
+- Booking updates and cancellations
+- View user bookings
+
+Flight Management
+
+- Create airports and airlines
+- Create airplanes and flight schedules
+- Flight seat booking system
+- Prevent double seat booking
+- View and cancel flight reservations
+
+Notifications
+
+- Booking confirmation notifications
+- Booking cancellation notifications
+- Flight reminder notifications before departure
+- Background task processing using Celery
+
+Background Processing
+
+- Asynchronous task processing
+- Scheduled reminder notifications
+
+---
+
+Tech Stack
+
+Technology| Purpose
+Python 3.11+| Programming Language
+FastAPI| Backend API framework
+MySQL| Relational database
+SQLAlchemy| ORM for database interaction
+Alembic| Database migrations
+Redis| Message broker and caching
+Celery| Background task processing
+JWT| Authentication
+
+---
+
+System Architecture
+
+The system follows a modular backend architecture:
+
+Client
+   ↓
+FastAPI REST API
+   ↓
+MySQL Database
+   ↓
+Celery Workers
+   ↓
+Redis Broker
+
+Flow
+
+1. User registers and logs in using JWT authentication.
+2. Admin creates hotels, rooms, airlines, airports, and flights.
+3. Users browse hotels or flights.
+4. Users book rooms or flight seats.
+5. Booking data is stored in MySQL.
+6. Celery schedules notification tasks.
+7. Users receive confirmation and reminder notifications.
 
 
+---
 
+Getting Started
 
+1. Clone Repository
 
-### tech satck
-<br> Python 3.11+
-<br> FastAPI
-<br> SQLAlchemy + Alembic
-<br> PostgreSQL
-<br> Redis
-<br> Celery (worker + beat scheduler)
+git clone https://github.com/yourusername/hotel_management_fastapi.git
+cd hotel_management_fastapi
 
-### Getting Started
+---
 
-    Clone the repo
-    Install dependencies:  pip install -r requirements.txt
-    Environment Variables: Create a .env file with DATABASE_URL, DATABASE_PASSWORD, DATBASE_HOST,EMAIL,EMAIL_PASSOWRD, and JWT_SECRET.
-    Run:  uvicorn main:app 
+2. Install Dependencies
 
-### API ENDPOINTS 
+pip install -r requirements.txt
 
-### ADMIN 
-POST admin/assing-role
+---
 
-### AUTH
-POST auth/signup
-<br> GET auth/verify
-<br>POST auth/register
-<br>POST auth/login
-<br> GET auth
+3. Setup Environment Variables
 
-### PERMISSION
-<br>POST /permissions
-<br>GET /permissions
-<br>POST /permissions/assign_permission
+Create a ".env" file in the project root.
 
-### ROLES
-<br>POST /roles
-<br>GET /roles
-<br>GET /roles/users
-<br>GET /roles/{role_id}
-<br>PATCH /roles/{role_id}
-<br>DELETE /roles/{role_id}
+DATABASE_URL=
+DATABASE_HOST=
+DATABASE_PASSWORD=
 
-### HOTELS
-<br>POST /hotels/
-<br>GET /hotels/
-<br>GET /hotels/my
-<br>GET /hotels{hotel_id}
-<br>PATCH /hotels/{hotel_id}
-<br>DELETE /hotels/{hotel_id}
+JWT_SECRET=
 
-### ROOMS
-<br>POST /rooms/{hotel_id}
-<br>GET /rooms/{hotel_id}
-<br>PATCH /rooms/{hotel_id}/{room_id}
-<br>DELETE /rooms/{hotel_id}/{room_id}
+EMAIL=
+EMAIL_PASSWORD=
 
-### HOTEL BOOKING 
-<br>GET /booking
-<br>POST /booking
-<br>PATCH /booking/{booking_id}
-<br>DELTE /booking/{booking_id}
-<br>GET /booking/{booking_id}
+REDIS_URL=redis://localhost:6379/0
 
+---
 
-### Flights & Schedules
+4. Run Database Migrations
 
-    GET /flights: Search for available flights by origin/destination.
-    POST /flights: Add a new flight route and schedule.
-    GET /flights/{flight_id}: Get real-time status and aircraft info.
+alembic upgrade head
 
-### Flight Bookings
+---
 
-    POST /flights/booking: Reserve a seat on a flight.
-    GET /flights/booking/{id}: View boarding pass and itinerary.
-    DELETE /flights/booking/{id}: Cancel flight ticket.
+5. Start FastAPI Server
+
+uvicorn main:app --reload
+
+Server runs at:
+
+http://127.0.0.1:8000
+
+API documentation:
+
+http://127.0.0.1:8000/docs
+
+---
+
+6. Start Background Workers
+
+Start Redis first.
+
+Then run Celery worker:
+
+celery -A app.core.celery_app worker --loglevel=info
+
+Start Celery Beat scheduler:
+
+celery -A app.core.celery_app beat --loglevel=info
+
+---
+
+API Endpoints
+
+Admin
+
+Assign role to user
+
+POST /admin/assign-role
+
+---
+
+Authentication
+
+Method| Endpoint| Description
+POST| /auth/signup| Create account
+GET| /auth/verify| Verify email
+POST| /auth/register| Register user
+POST| /auth/login| Login user
+GET| /auth| Get authenticated user
+
+---
+
+Permissions
+
+Method| Endpoint
+POST| /permissions
+GET| /permissions
+POST| /permissions/assign_permission
+
+---
+
+Roles
+
+Method| Endpoint
+POST| /roles
+GET| /roles
+GET| /roles/users
+GET| /roles/{role_id}
+PATCH| /roles/{role_id}
+DELETE| /roles/{role_id}
+
+---
+
+Hotels
+
+Method| Endpoint
+POST| /hotels
+GET| /hotels
+GET| /hotels/my
+GET| /hotels/{hotel_id}
+PATCH| /hotels/{hotel_id}
+DELETE| /hotels/{hotel_id}
+
+---
+
+Rooms
+
+Method| Endpoint
+POST| /rooms/{hotel_id}
+GET| /rooms/{hotel_id}
+PATCH| /rooms/{hotel_id}/{room_id}
+DELETE| /rooms/{hotel_id}/{room_id}
+
+---
+
+Hotel Booking
+
+Method| Endpoint
+GET| /booking
+POST| /booking
+GET| /booking/{booking_id}
+PATCH| /booking/{booking_id}
+DELETE| /booking/{booking_id}
+
+---
+
+Flights
+
+Method| Endpoint| Description
+GET| /flights| Search available flights
+POST| /flights| Create flight schedule
+GET| /flights/{flight_id}| Get flight details
+
+---
+
+Flight Bookings
+
+Method| Endpoint| Description
+POST| /flights/booking| Book flight seat
+GET| /flights/booking/{id}| View flight booking
+DELETE| /flights/booking/{id}| Cancel booking
+
+---
+
+Notifications
+
+The system automatically sends:
+
+- Booking confirmation emails
+- Booking cancellation notifications
+- Flight departure reminders
+
+Reminder jobs are processed by Celery workers and scheduled using Celery Beat.
+
+---
+
+Future Improvements
+
+Possible enhancements for the system:
+
+- Payment gateway integration
+- Real-time seat availability updates
+- Push notifications
+- Distributed worker scaling
+- Analytics dashboard for bookings
+
+---
+
+License
+
+This project is intended for educational and demonstration purposes.
