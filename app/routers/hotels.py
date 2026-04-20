@@ -7,12 +7,13 @@ from app.core.hotel_enums import StateEnum, CountryEnum
 from pydantic import BaseModel
 from typing import Optional
 from app.core.rate_limiter import fixed_window_rate_limit,sliding_window_rate_limiter
-
+from sqlalchemy.exc import SQLAlchemyError
 from app.schemas.schemas import HotelUpdate
 from pydantic import BaseModel
 from app.schemas.schemas import CreateHotel
 from typing import Annotated
 from app.models.user import User
+from app.core.dependencies import require_permission
 
 SessionDep = Annotated[Session, Depends(get_db)]
 CurretUser = Annotated[User,Depends(get_current_user)]
@@ -25,35 +26,35 @@ router = APIRouter()
 
 @router.post("/")
 def create_hotel(
-    # name: str,
-    # address: str,
-    # city: str,
-    # state: StateEnum,
-    # country: CountryEnum,
+  
     data : CreateHotel,
     db: SessionDep,
     current_user:CurretUser,
-    # user = Depends(require_permission("add_hotel"))   #permission endpoint
+    user = Depends(require_permission("add_hotel"))   #permission endpoint
 
 ):
-    name = data.name
-    address = data.address
-    city= data.city
-    state = data.state
-    country = data.country
+    try:
+        name = data.name
+        address = data.address
+        city= data.city
+        state = data.state
+        country = data.country
     
-    hotel = Hotel(
-        name=name,
-        address=address,
-        city=city,
-        state=state,
-        country=country,
-        owner_id=current_user.id
-    )
-    db.add(hotel)
-    db.commit()
-    db.refresh(hotel)
-    return hotel
+        hotel = Hotel(
+            name=name,
+            address=address,
+            city=city,
+            state=state,
+            country=country,
+            owner_id=current_user.id
+        )
+        db.add(hotel)
+        db.commit()
+        db.refresh(hotel)
+        return hotel
+    except SQLAlchemyError as e:
+        raise HTTPException(status_code=404, detail=f"database error : {e} ")
+        
 
 @router.get("/")
 def get_all_hotels(request:Request,db: SessionDep,current_user:CurretUser):

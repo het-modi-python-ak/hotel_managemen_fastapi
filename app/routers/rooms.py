@@ -8,6 +8,8 @@ from app.core.dependencies import get_current_user
 from typing import Optional
 from typing import Annotated
 from app.models.user import User
+from pydantic import BaseModel
+from app.schemas.schemas import CreateRoom,UpdateRoom
 
 SessionDep = Annotated[Session, Depends(get_db)]
 CurretUser = Annotated[User,Depends(get_current_user)]
@@ -15,15 +17,22 @@ CurretUser = Annotated[User,Depends(get_current_user)]
 
 router = APIRouter()
 
+
+    
+
 @router.post("/{hotel_id}", status_code=status.HTTP_201_CREATED)
 def create_room(
-    hotel_id: int,
-    room_type: RoomType,
-    price: float,
-    total_rooms: int,
+   
+    data:CreateRoom,
     db: SessionDep,
     current_user:CurretUser
 ):
+    
+    hotel_id=data.hotel_id
+    room_type = data.room_type
+    price = data.price
+    total_rooms=data.total_rooms
+    
     hotel = db.query(Hotel).filter(
         Hotel.hotel_id == hotel_id
     ).first()
@@ -42,6 +51,17 @@ def create_room(
     
     if total_rooms < 1:
         raise HTTPException(status_code=422, detail="total rooms can not be less than 0")
+    
+    existing_room = db.query(Room).filter(
+        Room.hotel_id == hotel_id, 
+        Room.room_type == room_type
+    ).first()
+
+    if existing_room:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Room category '{room_type}' already exists for this hotel."
+        )
     
 
 
@@ -72,11 +92,12 @@ def update_room(
     room_id: int, 
     db: SessionDep,
     current_user:CurretUser,
-    price: Optional[float] = None,
-    total_rooms: Optional[int] = None,
+   data:UpdateRoom
    
     
 ):
+    price = data.price
+    total_rooms=data.total_rooms
     #  Check if the hotel exists and belongs to the user
     hotel = db.query(Hotel).filter(
         Hotel.hotel_id == hotel_id,

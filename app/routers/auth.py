@@ -18,7 +18,7 @@ from app.services.email_service import send_verification_email
 from typing import Annotated
 SessionDep = Annotated[Session, Depends(get_db)]
 CurretUser = Annotated[User,Depends(get_current_user)]
-
+from pydantic import BaseModel,Field
 
 
 
@@ -26,22 +26,27 @@ CurretUser = Annotated[User,Depends(get_current_user)]
 router = APIRouter()
 
 
-
-
+class CreateUser(BaseModel):
+    name: str
+    email: str
+    phone: str = Field(..., pattern=r'^\d{10}$', description="10-digit phone number")
+    password: str
 
 
 
 @router.post("/signup")
 async def signup(
     background_tasks: BackgroundTasks, 
-    name: str, 
-    email: str, 
-    phone: str, 
-    password: str, 
+   data : CreateUser,
     db: SessionDep
 ):
-   
+    
+    name = data.name
+    email = data.email
+    phone = data.phone
+    password = data.password
     existing_user = db.query(User).filter(User.email == email).first()
+    
     if existing_user:
         raise HTTPException(status_code=409, detail="Email already exists")
 
@@ -97,40 +102,21 @@ def verify_email(token:str,db:SessionDep):
 
 
 
-@router.post("/register")
-def register(name: str, email: str, phone: str, password: str, db: SessionDep):
-
-    user = User(
-        name=name,
-        email=email,
-        phone=phone,
-        password=hash_password(password)
-    )
-
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-
-    return {"message": "User created"}
-
-
-
 
 @router.post("/login")
 def login(data: Annotated[OAuth2PasswordRequestForm, Depends()], db: SessionDep):
    
     user = db.query(User).filter(User.email == data.username).first()
     
-    user2 = db.query(User2).filter(User2.email==data.username).first()
+    
    
 
-    if not user and not user2:
+    if not user :
         raise HTTPException(status_code=400, detail="Invalid email or password") 
     
-    # if not user2.is_verified:   #updated user2
-    #     raise HTTPException(status_code=403,detail="Please verify your email")
     
-    if not verify_password(data.password, user.password):   # update d the user2
+    
+    if not verify_password(data.password, user.password):   
         raise HTTPException(status_code=400, detail="Invalid email or password")
     
     

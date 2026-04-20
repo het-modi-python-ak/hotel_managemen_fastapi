@@ -24,12 +24,7 @@ router = APIRouter()
 
 @router.post("/", status_code=status.HTTP_201_CREATED)
 def create_flight(
-    # flight_number: str,
-    # airplane_id: int,
-    # source_id: int,
-    # destination_id: int,
-    # depart_time: datetime,
-    # arrival_time: datetime,
+   
     data : CreateFlight,
     db: SessionDep,
     current_user:CurretUser
@@ -118,16 +113,6 @@ def create_flight(
         return {"message": "Flight created successfully", "flight_id": new_flight.flight_id ,
                 "source_id" : new_flight.source_id,"destination_id" : new_flight.destination_id}
         
-
-    except IntegrityError:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Flight number '{flight_number}' already exists."
-        ) 
-    except HTTPException as he:
-        db.rollback()
-        raise he
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))

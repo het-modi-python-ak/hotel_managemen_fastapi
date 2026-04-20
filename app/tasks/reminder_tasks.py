@@ -1,18 +1,3 @@
-# from app.core.celery_app import celery_app
-# from app.services.email_service import send_reminder_email
-# from app.database.database import SessionLocal
-# from app.models.booking import Booking
-
-# @celery_app.task
-# def send_booking_reminder(email:str,booking_id:int):
-    
-#     db = SessionLocal()
-    
-#     booking = db.query(Booking).filter(Booking.booking_id==booking_id).first()
-    
-#     if booking :
-#         send_reminder_email(email,booking_id)
-#     db.close()
 
 
 
@@ -41,22 +26,7 @@ from app.services.email_service import send_reminder_email_flight
 def send_booking_reminder(email:str,booking_id:int):
     send_reminder_email(email,booking_id)
     
-# @celery.task   
-# def check_flight_reminders():
-#     print("checking flight reminders ... ")
-#     db:Session = SessionLocal()
-#     now = datetime.now()
-#     target  = not + timedelta(minutes=10)
-#     bookings = (db.query(FlightBooking)).join(Flight).filter(Flight.depart_time>=now,Flight.depart_time<=target,FlightBooking.reminder_sent.is_(False)).all()
-#     user = db.query(User).filter(User.id==booking.created_by).first()
-    
-    
-#     for booking in bookings:
-#         send_notification(user.email,booking.flight.flight_number) 
-#         booking.reminder_sent=True
-#         db.commit()
-#         db.close()
-    
+
     
 @celery.task
 def check_flight_reminders():
@@ -66,18 +36,17 @@ def check_flight_reminders():
         now = datetime.now()
         target = now + timedelta(minutes=10)
         
-        # 1. Fixed syntax: 'not' changed to 'now'
-        # 2. Used .is_(False) or == False
+        
         bookings = (db.query(FlightBooking)
                     .join(Flight)
                     .filter(
                         Flight.depart_time >= now,
                         Flight.depart_time <= target,
-                        FlightBooking.reminder_sent.is_(False) # Corrected
+                        FlightBooking.reminder_sent.is_(False) 
                     ).all())
 
         for booking in bookings:
-            # 3. Fixed: Use 'booking' from loop, not 'booking' (undefined)
+           
             user = db.query(User).filter(User.id == booking.created_by).first()
             if user:
                 send_notification(user.email, booking.flight.flight_number)
@@ -90,7 +59,7 @@ def check_flight_reminders():
         print(f"Error: {e}")
         db.rollback()
     finally:
-        # 4. Ensure session closes
+        
         db.close()
 
     

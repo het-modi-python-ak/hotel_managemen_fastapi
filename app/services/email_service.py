@@ -39,10 +39,7 @@ async def send_verification_email(email:str,token:str):
     
     
 import asyncio    
-def send_reminder_email(email:str,booking_id:int):
-    message=MessageSchema(subject="Booking reminder", recipients=[email],body=f"please confirm your booking (ID) : {booking_id} before it expires",subtype="plain")
-    fm = FastMail(conf)
-    asyncio.run(fm.send_message(message))
+
 
 def send_reminder_email_flight(email:str,flight_id:int):
     message=MessageSchema(subject="Take off reminder", recipients=[email],body=f"the flight with number {flight_id} is going to takeoff in  few minutes ",subtype="plain")
@@ -50,11 +47,7 @@ def send_reminder_email_flight(email:str,flight_id:int):
     print("sending the email")
     asyncio.run(fm.send_message(message))
 
-# x = "het.modi@armakuni.com"
-# def send_reminder_email_sg(email:str,booking_id:int):
-#     message=MessageSchema(subject="Booking reminder", recipients=[x],body=f"please confirm your booking (ID) : 4 before it expires",subtype="plain")
-#     fm = FastMail(conf)
-#     asyncio.run(fm.send_message(message))
+
 
 def send_reminder_email(email:str,booking_id:int):
     async def _send():
@@ -64,11 +57,3 @@ def send_reminder_email(email:str,booking_id:int):
     
     asyncio.run(_send())
 
-
-def send_reminder_emai_flight(email:str,flight_id:int):
-    async def _send():
-        message=MessageSchema(subject="flight reminder", recipients=[email],body=f"the flight with id {flight_id} will take off soon ", subtype="plain")
-        fm = FastMail(conf)
-        await fm.send_message(message)
-    
-    asyncio.run(_send())

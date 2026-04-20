@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from app.schemas.schemas import CreateArline
 from typing import Annotated
 from app.models.user import User
+from app.core.dependencies import require_permission
 
 SessionDep = Annotated[Session, Depends(get_db)]
 CurretUser = Annotated[User,Depends(get_current_user)]
@@ -19,11 +20,11 @@ router = APIRouter()
 
 @router.post("/", status_code=status.HTTP_201_CREATED)
 def create_airline(
-    # name: str,
-    # country: str,
+ 
     data : CreateArline,
     db: SessionDep,
-    current_user :CurretUser
+   current_user :CurretUser, user=Depends(require_permission("add_airlines"))
+    
 ):
     try:
         name = data.name
@@ -37,9 +38,9 @@ def create_airline(
         db.commit()
         db.refresh(airline)
         return airline
-    except SQLAlchemyError:
+    except SQLAlchemyError as e :
         db.rollback()
-        raise HTTPException(status_code=500, detail="Database error occurred while creating airline")
+        raise HTTPException(status_code=500, detail=f"Database error occurred while creating airline {e}")
 
 
 
@@ -86,9 +87,7 @@ class UpdateArline(BaseModel):
 
 @router.patch("/{airline_id}")
 def update_airline(
-    # airline_id: int,
-    # name: str | None = None,
-    # country: str | None = None,
+    
     data : UpdateArline,
     db: SessionDep,
     current_user :CurretUser

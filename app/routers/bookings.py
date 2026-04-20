@@ -21,7 +21,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.services.email_service import send_booking_confirmation_email,send_cancellation_email
 from app.core.rate_limiter import fixed_window_rate_limit
 from app.tasks.reminder_tasks import send_booking_reminder
-from app.models.user_email import User2
+from app.models.user import User
 
 from typing import Annotated
 SessionDep = Annotated[Session, Depends(get_db)]
@@ -31,7 +31,7 @@ CurretUser = Annotated[User,Depends(get_current_user)]
 
 router = APIRouter()
 
-LOCK_TIME = 10  # time for booking
+LOCK_TIME = 600  # time for booking
 
 
 logger = logging.getLogger(__name__)
@@ -129,7 +129,7 @@ def create_booking(
         
         
         #send booking email 
-        user = db.query(User2).filter(User2.id==current_user.id).first()
+        user = db.query(User).filter(User.id==current_user.id).first()
         
         send_booking_reminder.apply_async(args=[user.email,booking.booking_id],countdown=10)
 

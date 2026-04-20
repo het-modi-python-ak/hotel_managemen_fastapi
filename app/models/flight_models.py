@@ -103,7 +103,7 @@ class Airline(Base):
     airline_id = Column(Integer, primary_key=True, index=True)
     name = Column(String(100), unique=True)
     country = Column(String(100))
-    created_by = Column(Integer, ForeignKey("users2.id"))
+    created_by = Column(Integer, ForeignKey("users.id"))
     created_at = Column(DateTime,default=datetime.now())
     updated_at = Column(DateTime,default=datetime.now())
 
@@ -119,7 +119,7 @@ class Airport(Base):
     name = Column(String(100))
     location = Column(String(100))
     country = Column(String(100))
-    created_by = Column(Integer, ForeignKey("users2.id"))
+    created_by = Column(Integer, ForeignKey("users.id"))
     created_at = Column(DateTime,default=datetime.now())
     updated_at = Column(DateTime,default=datetime.now())
 
@@ -136,7 +136,7 @@ class Airplane(Base):
     model = Column(String(100))
     total_seats = Column(Integer)
     airline_id = Column(Integer, ForeignKey("airlines.airline_id"))
-    created_by = Column(Integer, ForeignKey("users2.id"))
+    created_by = Column(Integer, ForeignKey("users.id"))
     created_at = Column(DateTime,default=datetime.now())
     updated_at = Column(DateTime,default=datetime.now())
 
@@ -153,7 +153,7 @@ class AirplaneSeat(Base):
     airplane_id = Column(Integer, ForeignKey("airplanes.airplane_id"))
     seat_number = Column(String(10))
     seat_class = Column(String(50))
-    created_by = Column(Integer, ForeignKey("users2.id"))
+    created_by = Column(Integer, ForeignKey("users.id"))
     created_at = Column(DateTime,default=datetime.now())
     updated_at = Column(DateTime,default=datetime.now())
 
@@ -165,7 +165,7 @@ class Flight(Base):
     __tablename__ = "flights"
 
     flight_id = Column(Integer, primary_key=True, index=True)
-    created_by = Column(Integer, ForeignKey("users2.id"))
+    created_by = Column(Integer, ForeignKey("users.id"))
 
     airplane_id = Column(Integer, ForeignKey("airplanes.airplane_id"))
 
@@ -176,7 +176,7 @@ class Flight(Base):
 
     depart_time = Column(DateTime)
     arrival_time = Column(DateTime)
-    created_by = Column(Integer, ForeignKey("users2.id"))
+    created_by = Column(Integer, ForeignKey("users.id"))
     created_at = Column(DateTime,default=datetime.now())
     updated_at = Column(DateTime,default=datetime.now())
     
@@ -201,7 +201,7 @@ class FlightSeat(Base):
     price = Column(Integer)
 
     is_booked = Column(Boolean, default=False)
-    created_by = Column(Integer, ForeignKey("users2.id"))
+    created_by = Column(Integer, ForeignKey("users.id"))
     created_at = Column(DateTime,default=datetime.now())
     updated_at = Column(DateTime,default=datetime.now())
 
@@ -213,14 +213,14 @@ class FlightBooking(Base):
     __tablename__ = "flight_bookings"
 
     booking_id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users2.id"))
+    user_id = Column(Integer, ForeignKey("users.id"))
     flight_id = Column(Integer, ForeignKey("flights.flight_id"))
     seat_number = Column(String(10))
     status = Column(String(50), default="pending")
     total_price = Column(Integer)
     reminder_sent = Column(Boolean,default=False)
 
-    created_by = Column(Integer, ForeignKey("users2.id"))
+    created_by = Column(Integer, ForeignKey("users.id"))
     created_at = Column(DateTime,default=datetime.now())
     updated_at = Column(DateTime,default=datetime.now())
     
