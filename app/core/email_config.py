@@ -4,7 +4,6 @@ from fastapi_mail import ConnectionConfig
 
 # Load variables from .env into the system environment
 load_dotenv()
-print(os.getenv("EMAIL_PASS"))
 conf = ConnectionConfig(
     MAIL_USERNAME="het.modi@armakuni.com",
     MAIL_PASSWORD=os.getenv("EMAIL_PASS"),

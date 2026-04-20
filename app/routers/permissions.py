@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends,HTTPException
 from sqlalchemy.orm import Session
 from app.database.database import get_db
 from app.models.permission import Permission
@@ -6,6 +6,7 @@ from app.models.role import Role
 from app.models.permission import Permission
 from typing import Annotated
 SessionDep = Annotated[Session, Depends(get_db)]
+
 
 router = APIRouter()
 
@@ -50,3 +51,22 @@ def assign_permission(role_id: int, permission_id: int, db: SessionDep):
     db.commit()
 
     return {"message": "Permission assigned"}
+
+
+@router.get("/{permission_id}/roles")
+def get_roles_by_permission(permission_id: int, db: SessionDep):
+    """
+    Returns a list of all roles that have been granted a specific permission.
+    """
+    permission = db.query(Permission).filter(Permission.id == permission_id).first()
+    
+    if not permission:
+        raise HTTPException(status_code=404, detail="Permission not found")
+
+    return [
+        {
+            "id": role.id,
+            "name": role.name
+        }
+        for role in permission.roles  
+    ]

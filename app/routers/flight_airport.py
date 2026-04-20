@@ -22,7 +22,7 @@ router = APIRouter()
 
 @router.post("/") 
 def create_airport(
-    # code:str,name:str,location:str,country:str
+    
                    data : CreateAirport,db:SessionDep,current_user:CurretUser):
     try:
         

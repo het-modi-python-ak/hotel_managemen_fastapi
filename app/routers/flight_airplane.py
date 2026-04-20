@@ -21,12 +21,7 @@ router = APIRouter()
 
 @router.post("/", status_code=status.HTTP_201_CREATED)
 def create_airplane(
-    # model: str,
-    # total_seats: int,
-    # airline_id: int,
-    # total_business_seat: int,
-    # total_economy_seat: int,
-    # total_premium_seat: int,
+   
     data : CreateAirplane,
     db: SessionDep,
     current_user:CurretUser
@@ -120,11 +115,11 @@ def create_airplane(
             "total_seats_created": len(seats)
         }
 
-    except SQLAlchemyError:
+    except SQLAlchemyError as e:
         db.rollback()
         raise HTTPException(
             status_code=500,
-            detail="Database error occurred while creating airplane"
+            detail=f"Database error occurred while creating airplane {e}"
         )
         
         
@@ -170,9 +165,7 @@ class UpdateAirple(BaseModel):
 
 @router.patch("/{airplane_id}")
 def update_airplane(
-    # airplane_id: int,
-    # model: str | None = None,
-    # total_seats: int | None = None,
+
     data : UpdateAirple,
     db: SessionDep,
     current_user = Depends(get_current_user)

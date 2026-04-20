@@ -9,7 +9,7 @@ from typing import List
 from app.schemas.schemas import FlightBookingreposnse
 from app.services.email_service import send_reminder_email
 from app.tasks.reminder_tasks import send_booking_reminder
-from app.models.user_email import User2
+
 from app.core.redis_client import redis_client
 import json
 from typing import Annotated
@@ -33,8 +33,7 @@ from app.schemas.schemas import Bookseats
     
 @router.post("/")
 def book_multiple_seats(
-    # flight_id: int,
-    # seat_numbers: List[str], 
+   
     data : Bookseats, 
     db: SessionDep,
     current_user:CurretUser
@@ -160,40 +159,7 @@ def delete_booking(booking_id: int, db: SessionDep, current_user:CurretUser):
                 seat.is_booked = False
         
 
-        # if not booking:
-        #     raise HTTPException(status_code=404, detail="Booking not found or unauthorized")
-
-        # #unbooked the all seat 
-        
-        # # seat_number = [B1,B2,B3]
-        
-        # for book in booking:
-        #     seat = db.query(FlightSeat).filter(FlightSeat.flight_id == book.flight_id,FlightSeat.seat_number== book.seat_number).first()
-        #     seat.is_booked = False
-
-            
-           
-            
-            
-        # for book in booking:
-        #     db.delete(book)
-
-
-        
-        
-        
-        
-        # seat = db.query(FlightSeat).filter(
-        #     FlightSeat.flight_id == booking.flight_id,
-        #     FlightSeat.seat_number == booking.seat_number
-        # ).all()
-        
-        
-        # for s in seat:
-        #     print(s)
-        #     s.is_booked = False
-        
-        # db.delete(booking)
+  
         db.delete(booking)
         db.commit()
         
@@ -214,9 +180,7 @@ class UpdateSeat(BaseModel):
 #update booking
 @router.put("/bookings/{booking_id}/swap-seat")
 def swap_single_seat(
-    # booking_id: int, 
-    # old_seat_number: str, 
-    # new_seat_number: str, 
+   
     data : UpdateSeat,
     db: SessionDep, 
     current_user = Depends(get_current_user)
@@ -236,8 +200,7 @@ def swap_single_seat(
         if not booking:
             raise HTTPException(status_code=404, detail="Booking not found")
 
-        #  Parse existing seats
-        # Assuming seat_number is stored as "A1,A2,A3"
+       
         current_seats = [s.strip() for s in booking.seat_number.split(",")]
 
         if old_seat_number not in current_seats:
