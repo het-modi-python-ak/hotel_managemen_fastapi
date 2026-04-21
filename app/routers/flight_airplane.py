@@ -1,113 +1,81 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
 from sqlalchemy.exc import SQLAlchemyError
 from app.database.database import get_db
-from app.models.flight_models import Airplane,Airline,FlightSeat,AirplaneSeat
+from app.models.flight_models import Airplane, Airline, AirplaneSeat
 from app.core.dependencies import get_current_user
-from enum import Enum
 from pydantic import BaseModel
-from app.schemas.schemas import SeatCategory,CreateAirplane
-
-from typing import Annotated
+from app.schemas.schemas import SeatCategory, CreateAirplane
+from typing import Annotated, List
 from app.models.user import User
 
-SessionDep = Annotated[Session, Depends(get_db)]
-CurretUser = Annotated[User,Depends(get_current_user)]
-
+# Use AsyncSession
+SessionDep = Annotated[AsyncSession, Depends(get_db)]
+CurretUser = Annotated[User, Depends(get_current_user)]
 
 router = APIRouter()
 
-
-
 @router.post("/", status_code=status.HTTP_201_CREATED)
-def create_airplane(
-   
-    data : CreateAirplane,
+async def create_airplane(
+    data: CreateAirplane,
     db: SessionDep,
-    current_user:CurretUser
+    current_user: CurretUser
 ):
-    
-    model = data.model
-    total_seats = data.total_seats
-    airline_id = data.airline_id
-    total_business_seat = data.total_business_seat
-    total_economy_seat = data.total_economy_seat
-    total_premium_seat = data.total_premium_seat
+    # Validation Logic
+    if data.total_seats <= 0:
+        raise HTTPException(status_code=400, detail="Total seats must be > 0")
 
-
-    if total_seats <= 0:
-        raise HTTPException(
-            status_code=400,
-            detail="Total seats must be greater than 0"
-        )
-
-    if total_business_seat + total_economy_seat + total_premium_seat != total_seats:
-        raise HTTPException(
-            status_code=412,
-            detail="Seat category totals must equal total seats"
-        )
+    if (data.total_business_seat + data.total_economy_seat + data.total_premium_seat) != data.total_seats:
+        raise HTTPException(status_code=412, detail="Seat category totals must equal total seats")
 
     try:
-
-        airline = db.query(Airline).filter(
-            Airline.airline_id == airline_id,
-            Airline.created_by == current_user.id
-        ).first()
+        # Check Airline Ownership
+        airline_result = await db.execute(
+            select(Airline).filter(
+                Airline.airline_id == data.airline_id,
+                Airline.created_by == current_user.id
+            )
+        )
+        airline = airline_result.scalars().first()
 
         if not airline:
-            raise HTTPException(
-                status_code=403,
-                detail="You cannot add airplane to another user's airline"
-            )
+            raise HTTPException(status_code=403, detail="Unauthorized airline access")
 
+        # 3. Create Airplane
         airplane = Airplane(
-            model=model,
-            total_seats=total_seats,
-            airline_id=airline_id,
+            model=data.model,
+            total_seats=data.total_seats,
+            airline_id=data.airline_id,
             created_by=current_user.id
         )
 
         db.add(airplane)
-        db.commit()
-        db.refresh(airplane)
+        await db.flush()  # airplane.airplane_id without committing
 
+        #  Generate Seat Layout
         seats = []
+        #  seat numbering
+        categories = [
+            (data.total_business_seat, "B", SeatCategory.BUSINESS.value),
+            (data.total_premium_seat, "P", SeatCategory.PREMIUM.value),
+            (data.total_economy_seat, "E", SeatCategory.ECONOMY.value)
+        ]
 
-        # BUSINESS seats
-        for i in range(total_business_seat):
-            seats.append(
-                AirplaneSeat(
-                    airplane_id=airplane.airplane_id,
-                    seat_number=f"B{i+1}",
-                    seat_class=SeatCategory.BUSINESS.value,
-                    created_by=current_user.id
+        for count, prefix, s_class in categories:
+            for i in range(count):
+                seats.append(
+                    AirplaneSeat(
+                        airplane_id=airplane.airplane_id,
+                        seat_number=f"{prefix}{i+1}",
+                        seat_class=s_class,
+                        created_by=current_user.id
+                    )
                 )
-            )
-
-        # PREMIUM seats
-        for i in range(total_premium_seat):
-            seats.append(
-                AirplaneSeat(
-                    airplane_id=airplane.airplane_id,
-                    seat_number=f"P{i+1}",
-                    seat_class=SeatCategory.PREMIUM.value,
-                    created_by=current_user.id
-                )
-            )
-
-        # ECONOMY seats
-        for i in range(total_economy_seat):
-            seats.append(
-                AirplaneSeat(
-                    airplane_id=airplane.airplane_id,
-                    seat_number=f"E{i+1}",
-                    seat_class=SeatCategory.ECONOMY.value,
-                    created_by=current_user.id
-                )
-            )
 
         db.add_all(seats)
-        db.commit()
+        await db.commit()
+        await db.refresh(airplane)
 
         return {
             "message": "Airplane created successfully with seat layout",
@@ -115,112 +83,88 @@ def create_airplane(
             "total_seats_created": len(seats)
         }
 
-    except SQLAlchemyError as e:
-        db.rollback()
-        raise HTTPException(
-            status_code=500,
-            detail=f"Database error occurred while creating airplane {e}"
-        )
-        
-        
-        
+    except Exception as e:
+        await db.rollback()
+        if isinstance(e, HTTPException): raise e
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.get("/")
-def get_all_airplanes(
-    db: SessionDep,
-   
-):
-    try:
-        airplanes = db.query(Airplane).all()
-        if not airplanes:
-            raise HTTPException(status_code=404, detail="No airplanes found")
-        return airplanes
-    except SQLAlchemyError:
-        raise HTTPException(status_code=500, detail="Error fetching airplanes")
-
-
+async def get_all_airplanes(db: SessionDep):
+    result = await db.execute(select(Airplane))
+    airplanes = result.scalars().all()
+    if not airplanes:
+        raise HTTPException(status_code=404, detail="No airplanes found")
+    return airplanes
 
 @router.get("/{airplane_id}")
-def get_airplane(
-    airplane_id: int,
-    db: SessionDep,
-  
-):
-    try:
-        airplane = db.query(Airplane).filter(Airplane.airplane_id == airplane_id).first()
-        if not airplane:
-            raise HTTPException(status_code=404, detail="Airplane not found")
-        return airplane
-    except SQLAlchemyError:
-        raise HTTPException(status_code=500, detail="Error retrieving airplane details")
+async def get_airplane(airplane_id: int, db: SessionDep):
+    result = await db.execute(select(Airplane).filter(Airplane.airplane_id == airplane_id))
+    airplane = result.scalars().first()
+    if not airplane:
+        raise HTTPException(status_code=404, detail="Airplane not found")
+    return airplane
 
-
-
-
-class UpdateAirple(BaseModel):
+class UpdateAirplane(BaseModel):
     airplane_id: int
-    model: str | None = None,
+    model: str | None = None
     total_seats: int | None = None
 
 
-@router.patch("/{airplane_id}")
-def update_airplane(
 
-    data : UpdateAirple,
+@router.patch("/{airplane_id}")
+async def update_airplane(
+    data: UpdateAirplane,
     db: SessionDep,
-    current_user = Depends(get_current_user)
+    current_user: CurretUser
 ):
     try:
+        result = await db.execute(
+            select(Airplane).filter(
+                Airplane.airplane_id == data.airplane_id,
+                Airplane.created_by == current_user.id
+            )
+        )
+        airplane = result.scalars().first()
         
-        airplane_id = data.airplane_id
-        model = data.model
-        total_seats = data.total_seats
-        
-        
-        
-        airplane = db.query(Airplane).filter(Airplane.airplane_id == airplane_id,Airplane.created_by==current_user.id).first()
         if not airplane:
             raise HTTPException(status_code=404, detail="Airplane not found")
 
-        if total_seats is not None and total_seats <= 0:
-            raise HTTPException(status_code=400, detail="Total seats must be greater than 0")
+        if data.total_seats is not None and data.total_seats <= 0:
+            raise HTTPException(status_code=400, detail="Total seats must be > 0")
 
-        if model:
-            airplane.model = model
-        if total_seats:
-            airplane.total_seats = total_seats
+        if data.model:
+            airplane.model = data.model
+        if data.total_seats:
+            airplane.total_seats = data.total_seats
 
-        db.commit()
-        db.refresh(airplane)
+        await db.commit()
+        await db.refresh(airplane)
         return airplane
-    except SQLAlchemyError:
-        db.rollback()
-        raise HTTPException(status_code=500, detail="Error updating airplane")
-
+    except Exception as e:
+        await db.rollback()
+        if isinstance(e, HTTPException): raise e
+        raise HTTPException(status_code=500, detail="Update failed")
 
 
 
 @router.delete("/{airplane_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_airplane(
-    airplane_id: int,
-    db: SessionDep,
-    current_user = Depends(get_current_user)
-):
+async def delete_airplane(airplane_id: int, db: SessionDep, current_user: CurretUser):
     try:
-        airplane = db.query(Airplane).filter(Airplane.airplane_id == airplane_id, Airplane.created_by == current_user.id).first()
-        if not airplane:
-            raise HTTPException(status_code=404, detail="Airplane not found ")
+        result = await db.execute(
+            select(Airplane).filter(
+                Airplane.airplane_id == airplane_id,
+                Airplane.created_by == current_user.id
+            )
+        )
+        airplane = result.scalars().first()
         
-        airplane = db.query(Airplane).filter(Airplane.airplane_id == airplane_id).first()
         if not airplane:
             raise HTTPException(status_code=404, detail="Airplane not found")
 
-        db.delete(airplane)
-        db.commit()
+        await db.delete(airplane)
+        await db.commit()
         return None  
-    except SQLAlchemyError:
-        db.rollback()
-        raise HTTPException(status_code=500, detail="Error deleting airplane")
-
-
-
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail="Delete failed")

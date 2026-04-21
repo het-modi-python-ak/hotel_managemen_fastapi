@@ -5,7 +5,7 @@ from app.core.celery_app import celery
 from app.services.email_service import send_reminder_email
 from sqlalchemy.orm import Session
 from app.core.celery_app import celery
-from app.database.database import SessionLocal
+from app.database.database import AsyncSessionLocal
 from app.models.flight_models import FlightBooking
 from app.models.flight_models import Flight
 from app.services.notification_service import send_notification
@@ -31,7 +31,7 @@ def send_booking_reminder(email:str,booking_id:int):
 @celery.task
 def check_flight_reminders():
     print("checking flight reminders ... ")
-    db:Session = SessionLocal()
+    db:Session = AsyncSessionLocal()
     try:
         now = datetime.now()
         target = now + timedelta(minutes=10)

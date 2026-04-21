@@ -71,6 +71,18 @@ class FlightBookingreposnse(BaseModel):
     total_price:int
     created_by:int
     
+
+    
+class AirportResponse(BaseModel):
+    id: int
+    code: str
+    name: str
+    location: str
+    country: str
+
+    class Config:
+        from_attributes = True 
+
     
     
     

@@ -7,7 +7,10 @@ from app.models.association import user_roles
 from app.models.hotel import Hotel
 from app.models.booking import Booking
 
+
+
 class User(Base):
+    
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)

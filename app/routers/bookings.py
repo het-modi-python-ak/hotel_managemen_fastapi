@@ -1,7 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, status,BackgroundTasks
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
 from sqlalchemy import func
 from datetime import date
+from typing import Annotated
+
 from app.database.database import get_db
 from app.models.booking import Booking
 from app.models.booking_item import BookingItem
@@ -10,40 +13,28 @@ from app.models.user import User
 from app.schemas.booking import BookingCreate
 from app.core.dependencies import get_current_user
 from app.core.redis_client import redis_client
-from app.core.hotel_enums import StateEnum, CountryEnum
-from sqlalchemy.orm import Session
-from sqlalchemy import func
-import logging
-from sqlalchemy.orm import Session
-from sqlalchemy import func
-from datetime import date
+from app.tasks.reminder_tasks import send_booking_reminder
+from fastapi import BackgroundTasks
 from sqlalchemy.exc import SQLAlchemyError
 from app.services.email_service import send_booking_confirmation_email,send_cancellation_email
 from app.core.rate_limiter import fixed_window_rate_limit
 from app.tasks.reminder_tasks import send_booking_reminder
 from app.models.user import User
+from sqlalchemy.orm import selectinload
 
-from typing import Annotated
-SessionDep = Annotated[Session, Depends(get_db)]
-CurretUser = Annotated[User,Depends(get_current_user)]
-
-
+SessionDep = Annotated[AsyncSession, Depends(get_db)]
+CurretUser = Annotated[User, Depends(get_current_user)]
 
 router = APIRouter()
-
-LOCK_TIME = 600  # time for booking
-
-
-logger = logging.getLogger(__name__)
-
+LOCK_TIME = 600 
 
 @router.post("/", status_code=status.HTTP_201_CREATED)
-def create_booking(
+async def create_booking(
     booking_data: BookingCreate,
     db: SessionDep,
-    current_user:CurretUser):
-   
-    
+    current_user: CurretUser
+):
+    #  Validation Logic
     if booking_data.check_in < date.today():
         raise HTTPException(status_code=400, detail="Check-in cannot be in the past")
 
@@ -51,70 +42,59 @@ def create_booking(
     if nights <= 0:
         raise HTTPException(status_code=400, detail="Check-out must be after check-in")
 
-    if booking_data.no_of_people < 1:
-        raise HTTPException(status_code=400, detail="Number of people should be at least 1")
-
     total_price = 0
     room_items = []
-    
-    # Track locked keys for potential rollback if db fails
-    locked_keys_in_this_req = []
+    locked_keys_info = [] # Store tuple of (key, quantity) for rollback
 
     try:
         for room_request in booking_data.rooms:
-            if room_request.quantity < 1:
-                raise HTTPException(status_code=400, detail="Booking quantity should be minimum 1")
-            
-            room = db.query(Room).filter(
+            #  Fetch Room (Async)
+            room_stmt = select(Room).filter(
                 Room.hotel_id == booking_data.hotel_id,
                 Room.room_type == room_request.room_type
-            ).first()
+            )
+            room_result = await db.execute(room_stmt)
+            room = room_result.scalars().first()
 
             if not room:
-                raise HTTPException(
-                    status_code=404,
-                    detail=f"{room_request.room_type} room not found"
-                )
+                raise HTTPException(status_code=404, detail=f"{room_request.room_type} room not found")
 
+            #  Redis Lock Check
             lock_key = f"lock:{booking_data.hotel_id}:{room.room_id}:{booking_data.check_in}:{booking_data.check_out}"
-            
-            
-            locked_rooms = redis_client.get(lock_key)
-            try:
-                locked_rooms = int(locked_rooms) if locked_rooms else 0
-            except:
-                locked_rooms = 0
+            raw_locked = redis_client.get(lock_key)
+            locked_rooms = int(raw_locked) if raw_locked else 0
 
-            booked = db.query(func.sum(BookingItem.quantity)).join(Booking).filter(
-                BookingItem.room_id == room.room_id,
-                Booking.status == "confirmed",
-                Booking.check_in < booking_data.check_out,
-                Booking.check_out > booking_data.check_in
-            ).scalar() or 0
+            #  Check DB Confirmed Bookings (Async Aggregate)
+            booked_stmt = (
+                select(func.sum(BookingItem.quantity))
+                .join(Booking)
+                .filter(
+                    BookingItem.room_id == room.room_id,
+                    Booking.status == "confirmed",
+                    Booking.check_in < booking_data.check_out,
+                    Booking.check_out > booking_data.check_in
+                )
+            )
+            booked_result = await db.execute(booked_stmt)
+            booked = booked_result.scalar() or 0
 
             available = room.total_rooms - booked - locked_rooms
             
-            if available <1:
-                raise HTTPException(status_code=409,detail="sorry, no rooms available")
-
             if available < room_request.quantity:
                 raise HTTPException(
                     status_code=409,
                     detail=f"Only {available} {room.room_type} rooms available"
                 )
 
-            #  Apply Locks 
+            #  Apply Redis Lock
             redis_client.incrby(lock_key, room_request.quantity)
             redis_client.expire(lock_key, LOCK_TIME)
-            locked_keys_in_this_req.append(lock_key)
+            locked_keys_info.append((lock_key, room_request.quantity))
 
             total_price += room.price * room_request.quantity * nights
-            room_items.append({
-                "room_id": room.room_id,
-                "quantity": room_request.quantity
-            })
+            room_items.append({"room_id": room.room_id, "quantity": room_request.quantity})
 
-     
+        #  Create Booking Record
         booking = Booking(
             user_id=current_user.id,
             hotel_id=booking_data.hotel_id,
@@ -123,16 +103,10 @@ def create_booking(
             no_of_people=booking_data.no_of_people,
             status="pending"
         )
-        
         db.add(booking)
-        db.flush()  # Generate booking_id
-        
-        
-        #send booking email 
-        user = db.query(User).filter(User.id==current_user.id).first()
-        
-        send_booking_reminder.apply_async(args=[user.email,booking.booking_id],countdown=10)
+        await db.flush() # Generate booking_id
 
+        #  Add Booking Items
         for item in room_items:
             db.add(
                 BookingItem(
@@ -142,226 +116,190 @@ def create_booking(
                 )
             )
         
-        db.commit()
-        db.refresh(booking)
-        
-        
-        
+        await db.commit()
+        await db.refresh(booking)
+
+        #  
+        send_booking_reminder.apply_async(
+            args=[current_user.email, booking.booking_id], 
+            countdown=10
+        )
+
         return {
             "booking_id": booking.booking_id,
             "status": booking.status,
             "total_price": total_price,
-            "message": "Rooms locked for 5 minutes. Confirm booking before timeout."
+            "message": "Rooms locked. Please confirm booking."
         }
 
-    except HTTPException:
-        
-        db.rollback()
-      
-        raise
-    except SQLAlchemyError as e:
-      
-        db.rollback()
-        
-        for key in locked_keys_in_this_req:
-            redis_client.decrby(key, room_request.quantity) 
-        
-        print(f"Database error: {e}") # Log the error
-        raise HTTPException(
-            status_code=500,
-            detail="An error occurred while processing your booking"
-        )
     except Exception as e:
+        await db.rollback()
+        #  Cleanup Redis locks if DB transaction fails
+        for key, qty in locked_keys_info:
+            redis_client.decrby(key, qty)
+            
        
-        db.rollback()
-        print(f"Unexpected error: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail="Internal server error"
-        )
+        raise HTTPException(status_code=500, detail="Internal server error during booking")
 
 
 
 @router.patch("/{booking_id}", status_code=status.HTTP_200_OK)
-def confirm_booking(
+async def confirm_booking(
     booking_id: int,
-    background_tasks : BackgroundTasks,
+    background_tasks: BackgroundTasks,
     db: SessionDep, 
-    current_user:CurretUser
+    current_user: CurretUser
 ):
     try:
-        #  Fetch Booking
-        booking = db.query(Booking).filter(Booking.booking_id == booking_id).first()
+        # 1. Fetch Booking with items using selectinload
+        stmt = (
+            select(Booking)
+            .filter(Booking.booking_id == booking_id)
+            .options(selectinload(Booking.booking_items))
+        )
+        result = await db.execute(stmt)
+        booking = result.scalars().first()
         
         if not booking:
             raise HTTPException(status_code=404, detail="Booking not found")
         
-        #  Authorization Check
         if booking.user_id != current_user.id:
             raise HTTPException(status_code=403, detail="Not authorized")
             
-        #  Status Validation
         if booking.status == "confirmed":
             return {"message": "Booking already confirmed"}
         
         if booking.status != "pending":
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Cannot confirm booking with status: {booking.status}. Only pending bookings can be confirmed."
-            )
+            raise HTTPException(status_code=400, detail=f"Cannot confirm {booking.status} booking")
             
-       #
-        items = db.query(BookingItem).filter(BookingItem.booking_id == booking_id).all()
-        
-        
-        for item in items:
+        # 2. Redis Validation and Lock Release
+        for item in booking.booking_items:
             lock_key = f"lock:{booking.hotel_id}:{item.room_id}:{booking.check_in}:{booking.check_out}"
+            
             if not redis_client.exists(lock_key):
-              
                 booking.status = "cancelled"
-                db.commit()
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Booking window expired. Booking automatically cancelled. Please create a new booking."
-                )
-                
-        
-        for item in items:
-            lock_key = f"lock:{booking.hotel_id}:{item.room_id}:{booking.check_in}:{booking.check_out}"
-        
-            new_value = redis_client.decrby(lock_key, item.quantity)
-            if new_value <= 0:
+                await db.commit()
+                raise HTTPException(status_code=400, detail="Booking window expired")
+            
+            # Decrement and cleanup Redis
+            new_val = redis_client.decrby(lock_key, item.quantity)
+            if new_val <= 0:
                 redis_client.delete(lock_key)
                 
-       
+        # 3. Finalize
         booking.status = "confirmed"
-        db.commit()
-        db.refresh(booking)
-        #email sending 
-        user = db.query(User).filter(User.id==booking.user_id).first()
+        await db.commit()
+        await db.refresh(booking)
         
-        background_tasks.add_task(send_booking_confirmation_email,user.email,booking.booking_id)
-        
+        background_tasks.add_task(send_booking_confirmation_email, current_user.email, booking.booking_id)
         return {"message": "Booking confirmed", "booking_id": booking.booking_id}
 
-    
-    except SQLAlchemyError as e:
-        
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Database error occurred during confirmation."
-        )
     except Exception as e:
-      
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An unexpected error occurred. {e}"
-        )
+        await db.rollback()
+        if isinstance(e, HTTPException): raise e
+        raise HTTPException(status_code=500, detail=str(e))
 
 
-
-
-# delete booking
 @router.delete("/{booking_id}")
-def cancel_booking(
+async def cancel_booking(
     booking_id: int,
-    background_tasks:BackgroundTasks,
+    background_tasks: BackgroundTasks,
     db: SessionDep,
-    current_user:CurretUser
+    current_user: CurretUser
 ):
     try:
-        booking = db.query(Booking).filter(Booking.booking_id == booking_id).first()
+        # Fetch Booking with items
+        stmt = (
+            select(Booking)
+            .filter(Booking.booking_id == booking_id)
+            .options(selectinload(Booking.booking_items))
+        )
+        result = await db.execute(stmt)
+        booking = result.scalars().first()
 
         if not booking:
             raise HTTPException(status_code=404, detail="Booking not found")
 
         if booking.user_id != current_user.id:
-            raise HTTPException(status_code=403, detail="Not authorized to cancel this booking")
+            raise HTTPException(status_code=403, detail="Not authorized")
             
         if booking.status == "cancelled":
             return {"message": "Booking is already cancelled"}
 
-        #  release Redis locks if the booking was still 'pending'
+        # Release Redis locks if it was still pending
         if booking.status == "pending":
-            items = db.query(BookingItem).filter(BookingItem.booking_id == booking_id).all()
-            for item in items:
+            for item in booking.booking_items:
                 lock_key = f"lock:{booking.hotel_id}:{item.room_id}:{booking.check_in}:{booking.check_out}"
                 if redis_client.exists(lock_key):
-                    new_value = redis_client.decrby(lock_key, item.quantity)
-                    if new_value <= 0:
+                    new_val = redis_client.decrby(lock_key, item.quantity)
+                    if new_val <= 0:
                         redis_client.delete(lock_key)
 
         booking.status = "cancelled"
-        db.commit()
+        await db.commit()
         
-        #booking cancellation email 
-        user = db.query(User).filter(User.id==booking.user_id).first()
-        
-        background_tasks.add_task(send_cancellation_email,user.email,booking.booking_id)
-        
+        background_tasks.add_task(send_cancellation_email, current_user.email, booking.booking_id)
         return {"message": "Booking cancelled successfully"}
 
-    except HTTPException as he:
-        db.rollback()
-        raise he
     except Exception as e:
-        db.rollback()
-       
-        raise HTTPException(status_code=500, detail="Internal server error while cancelling booking")
+        await db.rollback()
+        if isinstance(e, HTTPException): raise e
+        raise HTTPException(status_code=500, detail="Internal server error")
 
-# Get all bookings for current user
 @router.get("/")
-def get_my_bookings(
+async def get_my_bookings(
     db: SessionDep,
-    current_user:CurretUser
+    current_user: CurretUser
 ):
     try:
-        fixed_window_rate_limit(current_user.id,"get_my_bookings")
-        bookings = db.query(Booking).filter(
-            Booking.user_id == current_user.id
-        ).all()
-        return bookings
-    except Exception as e:
-        # Log the error internally here
-        raise HTTPException(
-            status_code=500, 
-            detail="An error occurred while fetching your bookings"
+        
+        fixed_window_rate_limit(current_user.id, "get_my_bookings")
+        
+        result = await db.execute(
+            select(Booking).filter(Booking.user_id == current_user.id)
         )
+        return result.scalars().all()
+    except Exception as e:
+        if isinstance(e, HTTPException): raise e
+        raise HTTPException(status_code=500, detail="Error fetching your bookings")
 
-# Get specific booking details
-
+# 2. Get specific booking details
 @router.get("/{booking_id}") 
-def get_booking_details(
+async def get_booking_details(
     booking_id: int,
     db: SessionDep,
-    current_user:CurretUser
+    current_user: CurretUser
 ):
     try:
-        booking = db.query(Booking).filter(
-            Booking.booking_id == booking_id,
-            Booking.user_id == current_user.id
-        ).first()
+        # Verify Booking existence and ownership
+        booking_result = await db.execute(
+            select(Booking).filter(
+                Booking.booking_id == booking_id,
+                Booking.user_id == current_user.id
+            )
+        )
+        booking = booking_result.scalars().first()
 
         if not booking:
-            raise HTTPException(
-                status_code=404, 
-                detail="Booking not found or not authorized"
-            )
+            raise HTTPException(status_code=404, detail="Booking not found or unauthorized")
 
-        # booking items and join with the Room model to get room types
-        details = db.query(BookingItem, Room.room_type).join(Room).filter(
-            BookingItem.booking_id == booking_id
-        ).all()
+        # Fetch items and room types in a single joined query
+        details_stmt = (
+            select(BookingItem, Room.room_type)
+            .join(Room, BookingItem.room_id == Room.room_id)
+            .filter(BookingItem.booking_id == booking_id)
+        )
+        details_result = await db.execute(details_stmt)
+        # This returns a list of rows, each containing (BookingItem, str)
+        details_rows = details_result.all()
 
         room_details = [
             {
-                "room_type": room_type,
-                "quantity": item.quantity,
-                "room_id": item.room_id
+                "room_type": row.room_type,
+                "quantity": row.BookingItem.quantity,
+                "room_id": row.BookingItem.room_id
             }
-            for item, room_type in details
+            for row in details_rows
         ]
 
         return {
@@ -373,101 +311,72 @@ def get_booking_details(
             "rooms_booked": room_details
         }
 
-    except HTTPException as he:
-       
-        raise he
     except Exception as e:
-        # Catch unexpected database or server errors
-        raise HTTPException(
-            status_code=500, 
-            detail="An error occurred while retrieving booking details"
-        )
+        if isinstance(e, HTTPException): raise e
+        raise HTTPException(status_code=500, detail="Error retrieving booking details")
 
 
-
-
-#for cancelling all pending bookings for tetsting propese 
 @router.post("/test/cancel_all_pending")
-def cancel_all_pending_bookings(
+async def cancel_all_pending_bookings(
     db: SessionDep,
-    current_user:CurretUser
+    current_user: CurretUser
 ):
-    
-  
-    pending_bookings = db.query(Booking).filter(
-        Booking.user_id == current_user.id,
-        Booking.status == "pending" 
-    ).all()
+    # Fetch bookings and their items in one async operation
+    stmt = (
+        select(Booking)
+        .filter(Booking.user_id == current_user.id, Booking.status == "pending")
+        .options(selectinload(Booking.booking_items))
+    )
+    result = await db.execute(stmt)
+    pending_bookings = result.scalars().all()
 
     if not pending_bookings:
         return {"message": "No pending bookings to cancel"}
 
-    total_cancelled = 0
     for booking in pending_bookings:
-       
-        items = db.query(BookingItem).filter(
-            BookingItem.booking_id == booking.booking_id
-        ).all()
-
-        for item in items:
+        # Release Redis locks for each item
+        for item in booking.booking_items:
             lock_key = f"lock:{booking.hotel_id}:{item.room_id}:{booking.check_in}:{booking.check_out}"
             
-         
             if redis_client.exists(lock_key):
                 new_value = redis_client.decrby(lock_key, item.quantity)
                 if new_value <= 0:
                     redis_client.delete(lock_key)
         
-       
         booking.status = "cancelled"
-        total_cancelled += 1
 
-    db.commit()
-    return {"message": f"Successfully cancelled {total_cancelled} pending bookings."}
-
+    await db.commit()
+    return {"message": f"Successfully cancelled {len(pending_bookings)} pending bookings."}
 
 
-
-
-
-
-#for cancelling all pending bookings for tetsting propese 
+# 
 @router.post("/test/cancel_all_confirm")
-def cancel_all_pending_bookings(
+async def cancel_all_confirmed_bookings(
     db: SessionDep,
-    current_user:CurretUser
+    current_user: CurretUser
 ):
-    
-    #Find all pending bookings for the user
-    pending_bookings = db.query(Booking).filter(
-        Booking.user_id == current_user.id,
-        Booking.status == "confirmed" 
-    ).all()
+    # Fetch confirmed bookings with items
+    stmt = (
+        select(Booking)
+        .filter(Booking.user_id == current_user.id, Booking.status == "confirmed")
+        .options(selectinload(Booking.booking_items))
+    )
+    result = await db.execute(stmt)
+    confirmed_bookings = result.scalars().all()
 
-    if not pending_bookings:
+    if not confirmed_bookings:
         return {"message": "No confirmed bookings to cancel"}
 
-    total_cancelled = 0
-    for booking in pending_bookings:
-       
-        items = db.query(BookingItem).filter(
-            BookingItem.booking_id == booking.booking_id
-        ).all()
-
-        for item in items:
+    for booking in confirmed_bookings:
+    
+        for item in booking.booking_items:
             lock_key = f"lock:{booking.hotel_id}:{item.room_id}:{booking.check_in}:{booking.check_out}"
-            
-           
             if redis_client.exists(lock_key):
                 new_value = redis_client.decrby(lock_key, item.quantity)
                 if new_value <= 0:
                     redis_client.delete(lock_key)
         
         booking.status = "cancelled"
-        total_cancelled += 1
 
-    db.commit()
-    return {"message": f"Successfully cancelled {total_cancelled} confirmed bookings."}
-
-
-
+    await db.commit()
+    return {"message": f"Successfully cancelled {len(confirmed_bookings)} confirmed bookings."}
