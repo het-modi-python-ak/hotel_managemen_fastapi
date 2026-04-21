@@ -23,7 +23,7 @@ from app.models.flight_models import Flight,FlightBooking,FlightSeat,SeatAllocat
 from app.services.email_service import send_reminder_email_flight
 
 @celery.task
-def send_booking_reminder(email:str,booking_id:int):
+def  send_booking_reminder(email:str,booking_id:int):
     send_reminder_email(email,booking_id)
     
 
