@@ -151,7 +151,7 @@ async def confirm_booking(
     current_user: CurretUser
 ):
     try:
-        # 1. Fetch Booking with items using selectinload
+        #  Fetch Booking with items using selectinload
         stmt = (
             select(Booking)
             .filter(Booking.booking_id == booking_id)
@@ -172,7 +172,7 @@ async def confirm_booking(
         if booking.status != "pending":
             raise HTTPException(status_code=400, detail=f"Cannot confirm {booking.status} booking")
             
-        # 2. Redis Validation and Lock Release
+        # Redis Validation and Lock Release
         for item in booking.booking_items:
             lock_key = f"lock:{booking.hotel_id}:{item.room_id}:{booking.check_in}:{booking.check_out}"
             
@@ -186,7 +186,7 @@ async def confirm_booking(
             if new_val <= 0:
                 redis_client.delete(lock_key)
                 
-        # 3. Finalize
+        #  Finalize
         booking.status = "confirmed"
         await db.commit()
         await db.refresh(booking)
