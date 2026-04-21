@@ -1,72 +1,69 @@
-from fastapi import APIRouter, Depends,HTTPException
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
+from sqlalchemy.orm import selectinload
 from app.database.database import get_db
 from app.models.permission import Permission
 from app.models.role import Role
-from app.models.permission import Permission
 from typing import Annotated
-SessionDep = Annotated[Session, Depends(get_db)]
 
+
+SessionDep = Annotated[AsyncSession, Depends(get_db)]
 
 router = APIRouter()
-
-router = APIRouter()
-
 
 @router.post("/")
-def create_permission(name: str, db: SessionDep):
-
+async def create_permission(name: str, db: SessionDep):
     permission = Permission(name=name)
-
     db.add(permission)
-    db.commit()
-    db.refresh(permission)
-
+    await db.commit()
+    await db.refresh(permission)
     return permission
 
-
-
 @router.get("/")
-def get_permissions(db: SessionDep):
-    permissions = db.query(Permission).all()
+async def get_permissions(db: SessionDep):
+    result = await db.execute(select(Permission))
+    permissions = result.scalars().all()
     return [
-        {
-            "id": p.id, 
-            "name": p.name
-        } 
+        {"id": p.id, "name": p.name} 
         for p in permissions
     ]
 
-
-
-
 @router.post("/assign_permission")
-def assign_permission(role_id: int, permission_id: int, db: SessionDep):
+async def assign_permission(role_id: int, permission_id: int, db: SessionDep):
+   
+    role_result = await db.execute(
+        select(Role).filter(Role.id == role_id).options(selectinload(Role.permissions))
+    )
+    role = role_result.scalars().first()
+    
+    perm_result = await db.execute(
+        select(Permission).filter(Permission.id == permission_id)
+    )
+    permission = perm_result.scalars().first()
 
-    role = db.query(Role).filter(Role.id == role_id).first()
-    permission = db.query(Permission).filter(Permission.id == permission_id).first()
+    if not role or not permission:
+        raise HTTPException(status_code=404, detail="Role or Permission not found")
 
     role.permissions.append(permission)
-
-    db.commit()
+    await db.commit()
 
     return {"message": "Permission assigned"}
 
-
 @router.get("/{permission_id}/roles")
-def get_roles_by_permission(permission_id: int, db: SessionDep):
-    """
-    Returns a list of all roles that have been granted a specific permission.
-    """
-    permission = db.query(Permission).filter(Permission.id == permission_id).first()
+async def get_roles_by_permission(permission_id: int, db: SessionDep):
+ 
+    result = await db.execute(
+        select(Permission)
+        .filter(Permission.id == permission_id)
+        .options(selectinload(Permission.roles))
+    )
+    permission = result.scalars().first()
     
     if not permission:
         raise HTTPException(status_code=404, detail="Permission not found")
 
     return [
-        {
-            "id": role.id,
-            "name": role.name
-        }
+        {"id": role.id, "name": role.name}
         for role in permission.roles  
     ]

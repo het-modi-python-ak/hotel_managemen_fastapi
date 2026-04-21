@@ -12,10 +12,21 @@ app = FastAPI()
 
 app.add_middleware(LoggingMiddleware)
 
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
+from app.database.database import engine, Base
 
+# Define the lifespan function
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # This runs when the app starts
+    async with engine.begin() as conn:
+        # This is how you run sync commands (like create_all) in async
+        await conn.run_sync(Base.metadata.create_all)
+    yield
+    # This runs when the app stops (clean up if needed)
 
-Base.metadata.create_all(bind=engine)  
-
+app = FastAPI(lifespan=lifespan)
 
 app.get("/")
 def home():

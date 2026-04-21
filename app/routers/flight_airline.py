@@ -1,134 +1,146 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
 from sqlalchemy.exc import SQLAlchemyError
 from app.database.database import get_db
 from app.models.flight_models import Airline
-from app.core.dependencies import get_current_user
+from app.core.dependencies import get_current_user, require_permission
 from pydantic import BaseModel
 from app.schemas.schemas import CreateArline
-from typing import Annotated
+from typing import Annotated, List
 from app.models.user import User
-from app.core.dependencies import require_permission
 
-SessionDep = Annotated[Session, Depends(get_db)]
-CurretUser = Annotated[User,Depends(get_current_user)]
-
+SessionDep = Annotated[AsyncSession, Depends(get_db)]
+CurretUser = Annotated[User, Depends(get_current_user)]
 
 router = APIRouter()
 
-
-
 @router.post("/", status_code=status.HTTP_201_CREATED)
-def create_airline(
- 
-    data : CreateArline,
+async def create_airline(
+    data: CreateArline,
     db: SessionDep,
-   current_user :CurretUser, user=Depends(require_permission("add_airlines"))
+    current_user: CurretUser,
     
+    user=Depends(require_permission("add_airlines"))
 ):
     try:
-        name = data.name
-        country = data.country
-        existing_airline = db.query(Airline).filter(Airline.name == name).first()
+       
+        result = await db.execute(select(Airline).filter(Airline.name == data.name))
+        existing_airline = result.scalars().first()
+        
         if existing_airline:
             raise HTTPException(status_code=400, detail="Airline already exists")
 
-        airline = Airline(name=name, country=country, created_by=current_user.id )
+        airline = Airline(
+            name=data.name, 
+            country=data.country, 
+            created_by=current_user.id 
+        )
         db.add(airline)
-        db.commit()
-        db.refresh(airline)
+        await db.commit()
+        await db.refresh(airline)
         return airline
-    except SQLAlchemyError as e :
-        db.rollback()
-        raise HTTPException(status_code=500, detail=f"Database error occurred while creating airline {e}")
+    except Exception as e:
+        await db.rollback()
+        if isinstance(e, HTTPException): raise e
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 
 
 @router.get("/")
-def get_all_airlines(db: SessionDep):
-    try:
-        airlines = db.query(Airline).all()
-        if not airlines:
-            raise HTTPException(status_code=404, detail="No airlines found")
-        return airlines
-    except SQLAlchemyError:
-        raise HTTPException(status_code=500, detail="Error fetching airlines from database")
+async def get_all_airlines(db: SessionDep):
+    result = await db.execute(select(Airline))
+    airlines = result.scalars().all()
+    if not airlines:
+        raise HTTPException(status_code=404, detail="No airlines found")
+    return airlines
+
 
 
 
 @router.get("/my")
-def get_all_airlines(db: SessionDep, current_user :CurretUser):
-    try:
-        airlines = db.query(Airline).filter(Airline.created_by==current_user.id).all()
-        if not airlines:
-            raise HTTPException(status_code=404, detail="No airlines found")
-        return airlines
-    except SQLAlchemyError:
-        raise HTTPException(status_code=500, detail="Error fetching airlines from database")
-
-
+async def get_my_airlines(db: SessionDep, current_user: CurretUser):
+    result = await db.execute(
+        select(Airline).filter(Airline.created_by == current_user.id)
+    )
+    airlines = result.scalars().all()
+    if not airlines:
+        raise HTTPException(status_code=404, detail="No airlines found")
+    return airlines
 
 
 @router.get("/{airline_id}")
-def get_airline(airline_id: int, db: SessionDep):
-    try:
-        airline = db.query(Airline).filter(Airline.airline_id == airline_id).first()
-        if not airline:
-            raise HTTPException(status_code=404, detail="Airline not found")
-        return airline
-    except SQLAlchemyError:
-        raise HTTPException(status_code=500, detail="Error fetching airline details")
-
+async def get_airline(airline_id: int, db: SessionDep):
+    result = await db.execute(select(Airline).filter(Airline.airline_id == airline_id))
+    airline = result.scalars().first()
+    if not airline:
+        raise HTTPException(status_code=404, detail="Airline not found")
+    return airline
 
 class UpdateArline(BaseModel):
-    airline_id:int
-    name:str | None = None
+    airline_id: int
+    name: str | None = None
     country: str | None = None
 
 @router.patch("/{airline_id}")
-def update_airline(
-    
-    data : UpdateArline,
+async def update_airline(
+    data: UpdateArline,
     db: SessionDep,
-    current_user :CurretUser
+    current_user: CurretUser
 ):
     try:
-        airline_id = data.airline_id
-        name = data.name
-        country = data.country
+        # Fetch current airline
+        result = await db.execute(
+            select(Airline).filter(
+                Airline.airline_id == data.airline_id,
+                Airline.created_by == current_user.id
+            )
+        )
+        airline = result.scalars().first()
         
-        airline = db.query(Airline).filter(Airline.airline_id == airline_id,Airline.created_by==current_user.id).first()
         if not airline:
-            raise HTTPException(status_code=404, detail="Airline not found")
+            raise HTTPException(status_code=404, detail="Airline not found or unauthorized")
 
-        if name:
-            duplicate = db.query(Airline).filter(Airline.name == name, Airline.airline_id != airline_id).first()
-            if duplicate:
-                raise HTTPException(status_code=400, detail="Airline with this name already exists")
-            airline.name = name
+        if data.name:
+            # Check for duplicate names excluding current ID
+            dup_result = await db.execute(
+                select(Airline).filter(Airline.name == data.name, Airline.airline_id != data.airline_id)
+            )
+            if dup_result.scalars().first():
+                raise HTTPException(status_code=400, detail="Airline name already exists")
+            airline.name = data.name
         
-        if country:
-            airline.country = country
+        if data.country:
+            airline.country = data.country
 
-        db.commit()
-        db.refresh(airline)
+        await db.commit()
+        await db.refresh(airline)
         return airline
-    except SQLAlchemyError:
-        db.rollback()
-        raise HTTPException(status_code=500, detail="Error updating airline")
+    except Exception as e:
+        await db.rollback()
+        if isinstance(e, HTTPException): raise e
+        raise HTTPException(status_code=500, detail="Update failed")
+
 
 
 
 @router.delete("/{airline_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_airline(airline_id: int,current_user: CurretUser, db: Session = Depends(get_db)):
+async def delete_airline(airline_id: int, db: SessionDep, current_user: CurretUser):
     try:
-        airline = db.query(Airline).filter(Airline.airline_id == airline_id,Airline.created_by==current_user.id).first()
+        result = await db.execute(
+            select(Airline).filter(
+                Airline.airline_id == airline_id,
+                Airline.created_by == current_user.id
+            )
+        )
+        airline = result.scalars().first()
+        
         if not airline:
             raise HTTPException(status_code=404, detail="Airline not found")
 
-        db.delete(airline)
-        db.commit()
+        await db.delete(airline)
+        await db.commit()
         return None 
-    except SQLAlchemyError:
-        db.rollback()
-        raise HTTPException(status_code=500, detail="Error deleting airline")
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail="Delete failed")

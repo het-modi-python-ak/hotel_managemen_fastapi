@@ -1,66 +1,66 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
 from sqlalchemy.exc import SQLAlchemyError
 from app.database.database import get_db
 from app.models.flight_models import Airport 
 from app.core.dependencies import get_current_user
-from pydantic import BaseModel
 from app.schemas.schemas import CreateAirport
-
-from typing import Annotated
+from typing import Annotated, List
 from app.models.user import User
-
-SessionDep = Annotated[Session, Depends(get_db)]
-CurretUser = Annotated[User,Depends(get_current_user)]
-
+from app.schemas.schemas import AirportResponse
+# Use AsyncSession
+SessionDep = Annotated[AsyncSession, Depends(get_db)]
+CurretUser = Annotated[User, Depends(get_current_user)]
 
 router = APIRouter()
 
-
-
-
-
-@router.post("/") 
-def create_airport(
-    
-                   data : CreateAirport,db:SessionDep,current_user:CurretUser):
+@router.post("/", status_code=status.HTTP_201_CREATED) 
+async def create_airport(
+    data: CreateAirport,
+    db: SessionDep,
+    current_user: CurretUser
+):
     try:
-        
-        code = data.code
-        name = data.name
-        location = data.location
-        country = data.country
-        
-        existing_airport=db.query(Airport).filter(Airport.code==code).first()
+        # Check if airport code already exists (Async style)
+        result = await db.execute(select(Airport).filter(Airport.code == data.code.upper()))
+        existing_airport = result.scalars().first()
 
         if existing_airport:
-            raise HTTPException(status_code=400,detail="Airport code already exists")
+            raise HTTPException(status_code=400, detail="Airport code already exists")
 
+        airport = Airport(
+            code=data.code.upper(),
+            name=data.name,
+            location=data.location,
+            country=data.country,
+            created_by=current_user.id
+        )
         
-        airport = Airport(code=code.upper(),name=name,location=location,country=country,created_by = current_user.id)
         db.add(airport)
-        db.commit()
-        db.refresh(airport)
+        await db.commit()
+        await db.refresh(airport)
 
         return airport
     except SQLAlchemyError:
-        db.rollback()
-        raise HTTPException(status_code=500,detail="Error creating airport")
+        await db.rollback()
+        raise HTTPException(status_code=500, detail="Error creating airport")
+    except Exception as e:
+        if isinstance(e, HTTPException): raise e
+        raise HTTPException(status_code=500, detail=str(e))
+    
 
 
+@router.get("/", response_model=List[AirportResponse])
+async def get_airports(db: SessionDep):
+    result = await db.execute(select(Airport))
+    return result.scalars().all()
 
-from typing import List
-
-# GET: Retrieve all airports
-@router.get("/")
-def get_airports(db: SessionDep):
-    return db.query(Airport).all()
-
-# GET: Retrieve a single airport by its code
 @router.get("/{airport_code}")
-def get_airport(airport_code: str, db: SessionDep):
-    airport = db.query(Airport).filter(Airport.code == airport_code).first()
+async def get_airport(airport_code: str, db: SessionDep):
+    result = await db.execute(select(Airport).filter(Airport.code == airport_code.upper()))
+    airport = result.scalars().first()
+    
     if not airport:
         raise HTTPException(status_code=404, detail="Airport not found")
     return airport
-
