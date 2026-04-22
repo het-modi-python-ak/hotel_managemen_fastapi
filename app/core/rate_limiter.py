@@ -2,7 +2,7 @@ import time
 from fastapi import HTTPException,status
 from app.core.redis_client import redis_client
 import uuid
-
+from starlette.middleware.base import BaseHTTPMiddleware
 
 request_store={}
 
@@ -61,5 +61,43 @@ def sliding_window_rate_limiter(user_id: int, endpoint: str, limit: int = 5, win
 
 
 
-#zset = score + member 
-#scor = timestamp memmber = uniquer request Id
+
+
+
+class RateLimiterMiddleware(BaseHTTPMiddleware):
+    def __init__(self, app, limit: int = 5, window: int = 60):
+        super().__init__(app)
+        self.limit = limit
+        self.window = window
+
+    async def dispatch(self, request: Request, call_next):
+        user_id = request.headers.get("user-id", "anonymous")
+        endpoint = request.url.path
+
+        key = f"rate_limit:{user_id}:{endpoint}"
+
+        now = time.time()
+        window_start = now - self.window
+
+        pipe = redis_client.pipeline()
+
+        pipe.zremrangebyscore(key, 0, window_start)
+        pipe.zcard(key)
+
+        unique_id = f"{now}-{uuid.uuid4()}"
+        pipe.zadd(key, {unique_id: now})
+
+        pipe.expire(key, self.window)
+
+        results = pipe.execute()
+        request_count = results[1]
+
+        if request_count >= self.limit:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Too many requests. Please try again later."
+            )
+
+        return await call_next(request)
+
+
