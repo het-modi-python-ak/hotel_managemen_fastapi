@@ -5,10 +5,17 @@ from app.database.database import engine, Base
 import app.models  
 from app.models.flight_models import Airline,Airport,Airplane,AirplaneSeat,Flight,FlightSeat,FlightBooking,Passenger,SeatAllocation
 from app.middleware.logging import LoggingMiddleware
+from app.middleware.rate_limiter import RateLimiterMiddleware
+
 
 
 
 app = FastAPI() 
+app.add_middleware(
+    RateLimiterMiddleware,
+    limit=10,      
+    window=60     
+)
 
 app.add_middleware(LoggingMiddleware)
 
